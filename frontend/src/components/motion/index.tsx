@@ -16,7 +16,7 @@ import {
   useTransform,
   type MotionProps,
 } from "framer-motion";
-import { useRef, type ReactNode } from "react";
+import { useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { cn } from "@/utils";
 import { DURATION, EASE, SPRING } from "@/lib/motion";
 
@@ -132,6 +132,38 @@ export function Magnetic({ children, className, strength = 0.3 }: {
     >
       {children}
     </motion.div>
+  );
+}
+
+// ── Spotlight — cursor-tracked specular highlight on a surface ───────────────
+/**
+ * Wraps content in the `.spotlight` surface (globals.css) and feeds it the
+ * pointer position as --mx/--my. Writes straight to the element's style rather
+ * than through React state: this fires on every pointermove, and re-rendering
+ * a card subtree at pointer frequency is exactly the kind of avoidable work
+ * that makes an interface feel heavy. All the visual gating (coarse pointer,
+ * reduced motion, high-contrast) lives in CSS, so this stays a dumb emitter.
+ */
+export function Spotlight({ children, className, as: Tag = "div" }: {
+  children: ReactNode;
+  className?: string;
+  as?: "div" | "section" | "article";
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  return (
+    <Tag
+      ref={ref as never}
+      className={cn("spotlight", className)}
+      onPointerMove={(e: ReactPointerEvent<HTMLElement>) => {
+        const el = ref.current;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        el.style.setProperty("--mx", `${e.clientX - r.left}px`);
+        el.style.setProperty("--my", `${e.clientY - r.top}px`);
+      }}
+    >
+      {children}
+    </Tag>
   );
 }
 

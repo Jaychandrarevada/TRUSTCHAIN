@@ -113,6 +113,13 @@ export default {
           "0%, 100%": { transform: "translateX(-100%)" },
           "50%": { transform: "translateX(100%)" },
         },
+        // Loading-label ellipsis: dots fill in one at a time
+        "loader-dots": {
+          "0%": { content: '""' },
+          "25%": { content: '"."' },
+          "50%": { content: '".."' },
+          "75%, 100%": { content: '"..."' },
+        },
       },
       animation: {
         "aurora-drift": "aurora-drift 18s ease-in-out infinite",

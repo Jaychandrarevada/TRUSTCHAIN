@@ -16,7 +16,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { miscApi } from "@/services/api";
 import { cn } from "@/utils";
 import { DURATION, EASE, motionSafe, slideInLeft } from "@/lib/motion";
-import { Button } from "@/components/ui/button";
+import { Button, LinkButton } from "@/components/ui/button";
 import { CommandTrigger } from "@/components/CommandPalette";
 import { NetworkStatus } from "@/components/NetworkStatus";
 import { PageTransition } from "@/components/motion/PageTransition";
@@ -255,7 +255,7 @@ export function PublicLayout() {
             ) : (
               <>
                 <Link to="/login" className="hidden text-sm hover:text-primary-800 dark:hover:text-primary-400 sm:inline">Sign in</Link>
-                <Link to="/register"><Button size="sm">Get started</Button></Link>
+                <LinkButton to="/register" size="sm">Get started</LinkButton>
               </>
             )}
           </div>

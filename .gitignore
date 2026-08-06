@@ -58,3 +58,6 @@ server.log
 .DS_Store
 Thumbs.db
 *.swp
+
+# TS incremental build cache
+*.tsbuildinfo

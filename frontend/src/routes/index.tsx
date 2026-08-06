@@ -12,7 +12,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { ROLE_HOME } from "@/constants";
 import { ConsoleLayout, PublicLayout } from "@/layouts";
-import { Spinner } from "@/components/ui/misc";
+import { BlockchainLoader } from "@/components/motion/BlockchainLoader";
 
 // ── Lazy pages (route-level code splitting) ──────────────────────────────────
 const Landing = lazy(() => import("@/pages/Landing"));
@@ -77,7 +77,11 @@ const ISSUER_ROLES = ["owner", "issuer_admin", "approver", "operator", "viewer"]
 
 export function AppRoutes() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center"><Spinner /></div>}>
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <BlockchainLoader label="Preparing your secure session" />
+      </div>
+    }>
       <Routes>
         {/* Public */}
         <Route element={<PublicLayout />}>

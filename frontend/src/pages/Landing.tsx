@@ -10,14 +10,13 @@ import {
   Award, Building2, CheckCircle2, Fingerprint, Lock, ScanLine, Search,
   ShieldCheck, Sparkles, UploadCloud, Zap,
 } from "lucide-react";
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MeshBackground } from "@/components/motion/MeshBackground";
 import { AnimatedCounter } from "@/components/motion/AnimatedCounter";
 import { TrustMarquee } from "@/components/motion/TrustMarquee";
 import { NetworkStatus, NetworkStatusCard } from "@/components/NetworkStatus";
-import { Magnetic, Reveal, Stagger, StaggerItem, TiltCard, motion, useReducedMotion } from "@/components/motion";
+import { Magnetic, Reveal, Spotlight, Stagger, StaggerItem, TiltCard, motion, useReducedMotion } from "@/components/motion";
 import { EASE } from "@/lib/motion";
 
 // ── Interactive verdict demo (mirrors the real verdict UI, safe demo data) ───
@@ -155,9 +154,9 @@ export default function Landing() {
               transition={{ duration: 0.6, delay: 0.25 }}
             >
               <Magnetic>
-                <Link to="/verify"><Button size="lg"><Search className="h-4 w-4" aria-hidden /> Verify a certificate</Button></Link>
+                <LinkButton to="/verify" size="lg"><Search className="h-4 w-4" aria-hidden /> Verify a certificate</LinkButton>
               </Magnetic>
-              <Link to="/register"><Button size="lg" variant="secondary">For institutions →</Button></Link>
+              <LinkButton to="/register" size="lg" variant="secondary">For institutions →</LinkButton>
             </motion.div>
 
             <motion.div
@@ -218,6 +217,7 @@ export default function Landing() {
           {PILLARS.map(({ icon: Icon, title, body, points }) => (
             <StaggerItem key={title}>
               <TiltCard intensity={4} className="h-full">
+                <Spotlight className="h-full rounded-xl">
                 <Card glass hover className="flex h-full flex-col p-6">
                   <div className="grid h-12 w-12 place-items-center rounded-xl bg-primary-500/15 text-primary-600 shadow-glow dark:text-primary-400">
                     <Icon className="h-6 w-6" aria-hidden />
@@ -232,6 +232,7 @@ export default function Landing() {
                     ))}
                   </ul>
                 </Card>
+                </Spotlight>
               </TiltCard>
             </StaggerItem>
           ))}
@@ -338,9 +339,9 @@ export default function Landing() {
             <p className="mt-3 text-text-secondary">Join the institutions issuing verifiable credentials on TrustChain.</p>
             <div className="mt-8 flex justify-center gap-3">
               <Magnetic>
-                <Link to="/register"><Button size="lg">Get started free</Button></Link>
+                <LinkButton to="/register" size="lg">Get started free</LinkButton>
               </Magnetic>
-              <Link to="/verify"><Button size="lg" variant="outline">Try verification</Button></Link>
+              <LinkButton to="/verify" size="lg" variant="outline">Try verification</LinkButton>
             </div>
           </Reveal>
         </div>

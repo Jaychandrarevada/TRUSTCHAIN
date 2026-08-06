@@ -19,8 +19,16 @@ import { AppRoutes } from "@/routes";
  * Whether to play the first-visit brand intro. Reduced-motion users never see
  * it (WCAG 2.3.3) — the check runs once, synchronously, before first paint,
  * so there is never a flash of the intro that then immediately vanishes.
+ *
+ * Landing page ONLY. The intro is a brand moment for someone arriving at the
+ * marketing home, and nowhere else: a visitor who scanned a certificate QR
+ * lands on /v/:certUid wanting a verdict, and someone opening /login wants the
+ * form — a cinematic overlay in front of either is an obstacle, not a welcome.
+ * Checked against `window.location` rather than a router hook because this runs
+ * above <BrowserRouter>, before first paint.
  */
 function shouldPlayBoot(): boolean {
+  if (window.location.pathname !== "/") return false;
   try {
     if (localStorage.getItem(BOOT_SEEN_KEY)) return false;
   } catch {

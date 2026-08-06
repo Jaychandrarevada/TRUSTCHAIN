@@ -10,9 +10,10 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import { Loader2 } from "lucide-react";
 import { forwardRef, type ButtonHTMLAttributes } from "react";
+import { Link, type LinkProps } from "react-router-dom";
 import { cn } from "@/utils";
 
-const buttonVariants = cva(
+export const buttonVariants = cva(
   "relative inline-flex items-center justify-center gap-2 rounded-lg font-medium overflow-hidden " +
     "transition-[transform,background-color,box-shadow,color] duration-fast ease-out-expo " +
     "active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 whitespace-nowrap " +
@@ -68,8 +69,45 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         />
       )}
       {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-      <span className="relative">{children}</span>
+      {/* inline-flex, not a plain span: the button's own `items-center gap-2`
+          applies to THIS wrapper, not to its contents, so a bare span would lay
+          an icon and its label out on a text baseline — leaving the icon sitting
+          visibly high and the gap never applied. */}
+      <span className="relative inline-flex items-center gap-2">{children}</span>
     </button>
   ),
 );
 Button.displayName = "Button";
+
+/**
+ * A router link that LOOKS like a button.
+ *
+ * Use this instead of `<Link><Button/></Link>`: a <button> nested inside an <a>
+ * is invalid HTML and a real accessibility defect — assistive tech announces
+ * two nested interactive controls for one target, and the anchor's own focus
+ * ring and hit area collapse to the inline text box rather than matching the
+ * button people can see. One <a> styled as a button gives correct semantics
+ * (it navigates, so it should be a link), one focus ring, and the full visual
+ * area as the click target.
+ */
+export interface LinkButtonProps
+  extends Omit<LinkProps, "className">, VariantProps<typeof buttonVariants> {
+  className?: string;
+}
+
+export const LinkButton = forwardRef<HTMLAnchorElement, LinkButtonProps>(
+  ({ className, variant, size, children, ...props }, ref) => (
+    <Link ref={ref} className={cn(buttonVariants({ variant, size }), className)} {...props}>
+      {variant !== "ghost" && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r
+            from-transparent via-white/15 to-transparent transition-transform duration-500
+            group-hover:translate-x-full motion-reduce:hidden"
+        />
+      )}
+      <span className="relative inline-flex items-center gap-2">{children}</span>
+    </Link>
+  ),
+);
+LinkButton.displayName = "LinkButton";
