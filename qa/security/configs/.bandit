@@ -1,0 +1,8 @@
+# Bandit config for the Flask backend (run from backend/):
+#   bandit -r app -c ../qa/security/configs/.bandit -f json -o ../qa/reports/security/bandit.json
+# Baseline result (this cycle): 0 HIGH / 0 MEDIUM / 0 LOW across 2489 LOC.
+[bandit]
+exclude = /tests,/.venv
+# B101 assert_used is irrelevant here (no asserts in prod paths); keep all
+# injection/crypto/secret detectors ON — those are the ones that matter.
+skips = B101

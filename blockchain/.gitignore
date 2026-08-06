@@ -1,0 +1,23 @@
+# environment & secrets
+.env
+.env.*
+!.env.example
+
+# hardhat build outputs
+artifacts/
+cache/
+typechain-types/
+coverage/
+coverage.json
+dist/
+
+# dependencies
+node_modules/
+
+# deployment records are committed EXCEPT local
+deployments/localhost.json
+deployments/hardhat.json
+
+# editor
+.vscode/
+.idea/

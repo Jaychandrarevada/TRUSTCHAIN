@@ -1,0 +1,63 @@
+# TrustChain backend CI — lint → security scan → tests+coverage → Docker build.
+# Deployment prep: the built image is tagged and (on main) pushed to the
+# registry; actual rollout is GitOps-driven per TDD §17.2.
+name: backend-ci
+
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**"]
+  pull_request:
+    paths: ["backend/**"]
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install ruff black
+      - run: ruff check app tests scripts
+      - run: black --check app tests scripts
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install bandit pip-audit
+      # Bandit: SAST over the app; pip-audit: known-vuln scan of dependencies.
+      - run: bandit -r app -ll
+      - run: pip-audit -r requirements.txt --strict || true   # advisory until triage workflow lands
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -r requirements-dev.txt
+      - run: pytest --cov=app --cov-report=term-missing --cov-fail-under=80 -q
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: coverage, path: backend/.coverage }
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: false                       # push on main via registry creds (deploy prep)
+          tags: trustchain/backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

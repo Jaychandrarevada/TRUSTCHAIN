@@ -1,0 +1,46 @@
+# TrustChain backend — local development stack.
+#   docker compose up -d          → API :5000 (Swagger /api/v1/docs) + Postgres + Redis
+#   docker compose exec api python -m scripts.seed   → demo data
+# Production uses the same image behind the platform's EKS deployment; this
+# compose file is a dev/CI convenience, not the prod topology (TDD §18).
+services:
+  api:
+    build: .
+    ports: ["5000:5000"]
+    environment:
+      FLASK_ENV: development
+      DATABASE_URL: postgresql+psycopg2://trustchain:trustchain@db:5432/trustchain
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: dev-compose-secret
+      JWT_SECRET_KEY: dev-compose-jwt
+      BLOCKCHAIN_MODE: mock          # switch to web3 + set RPC_URL/addresses for testnet
+      CORS_ORIGINS: http://localhost:3000
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_started }
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:5000/api/v1/health/live')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: trustchain
+      POSTGRES_PASSWORD: trustchain
+      POSTGRES_DB: trustchain
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trustchain"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+volumes:
+  pgdata:

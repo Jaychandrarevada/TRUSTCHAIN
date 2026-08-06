@@ -1,0 +1,108 @@
+{
+  "info": {
+    "name": "TrustChain API v1",
+    "description": "Functional + negative + authz + boundary tests for the Flask API. Run with Newman (see newman-run.sh). Requires a seeded backend and env with {{base_url}}.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:5000/api/v1" },
+    { "key": "email", "value": "qa-user@example.com" },
+    { "key": "password", "value": "QaStr0ng-Password!" }
+  ],
+  "item": [
+    {
+      "name": "Health — live (no auth)",
+      "request": { "method": "GET", "url": "{{base_url}}/health/live" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "pm.test('status ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+      ] } }]
+    },
+    {
+      "name": "Auth — register",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/auth/register",
+        "body": { "mode": "raw", "raw": "{\"email\":\"{{email}}\",\"password\":\"{{password}}\",\"full_name\":\"QA User\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('201 or 409 (idempotent re-run)', () => pm.expect([201,409]).to.include(pm.response.code));"
+      ] } }]
+    },
+    {
+      "name": "Auth — login (negative: wrong password)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/auth/login",
+        "body": { "mode": "raw", "raw": "{\"email\":\"{{email}}\",\"password\":\"definitely-wrong\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('401 unauthorized', () => pm.response.to.have.status(401));",
+        "pm.test('stable error code', () => pm.expect(pm.response.json().code).to.eql('AUTHENTICATION_FAILED'));",
+        "pm.test('no stack trace leaked', () => pm.expect(pm.response.text()).to.not.include('Traceback'));"
+      ] } }]
+    },
+    {
+      "name": "Verify — unknown UID (neutral 404, anti-enumeration)",
+      "request": { "method": "GET", "url": "{{base_url}}/verify/TC-0000-0000-0000" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('404 not found', () => pm.response.to.have.status(404));",
+        "pm.test('problem envelope with traceId', () => {",
+        "  const b = pm.response.json();",
+        "  pm.expect(b).to.have.all.keys('status','code','title','detail','errors','traceId');",
+        "});"
+      ] } }]
+    },
+    {
+      "name": "Verify — malformed ID (boundary)",
+      "request": { "method": "GET", "url": "{{base_url}}/verify/not-a-valid-id" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('404 or 400, never 500', () => pm.expect([400,404]).to.include(pm.response.code));"
+      ] } }]
+    },
+    {
+      "name": "Authz — protected route without token (401)",
+      "request": { "method": "GET", "url": "{{base_url}}/wallet/credentials" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('401 without bearer', () => pm.response.to.have.status(401));"
+      ] } }]
+    },
+    {
+      "name": "Authz — issue without permission (403)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer invalid.jwt.token" }
+        ],
+        "url": "{{base_url}}/certificates/batches",
+        "body": { "mode": "raw", "raw": "{\"name\":\"x\",\"rows\":[{}]}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('401/403 — never issues on a bad token', () => pm.expect([401,403,422]).to.include(pm.response.code));"
+      ] } }]
+    },
+    {
+      "name": "Blockchain info (public config)",
+      "request": { "method": "GET", "url": "{{base_url}}/blockchain/info" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "pm.test('exposes chain_id + contracts', () => {",
+        "  const b = pm.response.json();",
+        "  pm.expect(b).to.have.property('chain_id');",
+        "  pm.expect(b).to.have.property('contracts');",
+        "});"
+      ] } }]
+    },
+    {
+      "name": "Swagger spec is served",
+      "request": { "method": "GET", "url": "{{base_url}}/swagger.json" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "pm.test('is OpenAPI', () => pm.expect(pm.response.json()).to.have.property('paths'));"
+      ] } }]
+    }
+  ]
+}

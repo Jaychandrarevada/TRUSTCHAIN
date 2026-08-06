@@ -1,0 +1,453 @@
+/**
+ * TrustChain global styles — premium 2026 design system.
+ *
+ * Design tokens as CSS variables (UI/UX spec §15), elevated with glass tints,
+ * ambient glow, and a gradient-mesh substrate. Light is default; `.dark`
+ * remaps to a deep-navy premium theme. `.oled` (opt-in) goes pure-black.
+ * Components consume ONLY semantic tokens — the premium look ships through the
+ * token layer, so no component contracts change.
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─────────────────── Light theme — warm ivory + black + gold ─────────────── */
+:root {
+  --tc-bg-page: #f7f4ec;
+  --tc-bg-surface: #fffdf8;
+  --tc-bg-raised: #fffdf8;
+  --tc-text-primary: #14120c;
+  --tc-text-secondary: #5c574a;
+  --tc-border-default: #e7e0cf;
+  --tc-focus-ring: #b8860b;
+
+  /* Glass + premium gold substrate */
+  --tc-glass-bg: rgba(255, 253, 248, 0.66);
+  --tc-glass-border: rgba(212, 175, 55, 0.30);
+  --tc-grid-line: rgba(20, 18, 12, 0.04);
+  --tc-mesh-opacity: 0.5;
+  --tc-noise-opacity: 0.025;
+
+  --tc-accent-institution: #b8860b;
+  --tc-accent-student: #9a7209;
+  --tc-accent-employer: #6e4e0c;
+  --tc-accent-admin: #96690a;
+
+  /* Data-viz tokens (charts, canvas) — the only place color literals are
+     unavoidable (SVG fill/canvas fillStyle can't always inherit semantic
+     utility classes), so they live here instead of being hardcoded per
+     chart/component. RGB triplets (no `rgb()` wrapper) so canvas draw loops
+     can build `rgba(${var},alpha)` strings directly. */
+  --tc-chart-accent: #b8860b;
+  --tc-node-active: 184, 134, 11;
+  --tc-node-pending: 217, 119, 6;
+  --tc-node-suspended: 220, 38, 38;
+  --tc-node-retired: 120, 113, 108;
+}
+
+/* ─────────────── Dark theme — obsidian black + metallic gold (default) ───── */
+.dark {
+  --tc-bg-page: #070707;
+  --tc-bg-surface: #111111;
+  --tc-bg-raised: #191919;
+  --tc-text-primary: #f5f1e6;
+  --tc-text-secondary: #a9a08c;
+  --tc-border-default: #232019;
+  --tc-focus-ring: #d4af37;
+
+  /* Frosted white glass over obsidian, gold-rimmed (Linear/Vercel-grade) */
+  --tc-glass-bg: rgba(255, 255, 255, 0.08);
+  --tc-glass-border: rgba(212, 175, 55, 0.22);
+  --tc-grid-line: rgba(212, 175, 55, 0.05);
+  --tc-mesh-opacity: 0.7;
+  --tc-noise-opacity: 0.05;
+
+  --tc-accent-institution: #d4af37;
+  --tc-accent-student: #e8c96b;
+  --tc-accent-employer: #d4af37;
+  --tc-accent-admin: #b8912b;
+
+  --tc-chart-accent: #d4af37;
+  --tc-node-active: 212, 175, 55;
+  --tc-node-pending: 251, 191, 36;
+  --tc-node-suspended: 248, 113, 113;
+  --tc-node-retired: 120, 113, 108;
+}
+
+/* OLED — opt-in via `.dark.oled` (true obsidian, battery-friendly) */
+.dark.oled {
+  --tc-bg-page: #000000;
+  --tc-bg-surface: #0a0a0a;
+  --tc-bg-raised: #101010;
+  --tc-border-default: #201d16;
+}
+
+/* High-contrast — accessibility theme: max contrast, thick borders, no glow/mesh */
+.hc {
+  --tc-bg-page: #ffffff;
+  --tc-bg-surface: #ffffff;
+  --tc-bg-raised: #ffffff;
+  --tc-text-primary: #000000;
+  --tc-text-secondary: #1a1a1a;
+  --tc-border-default: #000000;
+  --tc-focus-ring: #0a48d6;
+  --tc-glass-bg: #ffffff;
+  --tc-glass-border: #000000;
+  --tc-mesh-opacity: 0;
+  --tc-noise-opacity: 0;
+
+  /* HC data-viz: gold reads too low-contrast on white at AAA, so HC swaps
+     to the same blue used for the HC focus ring plus the existing
+     warning-700/danger-800 scale — deliberate hues, not the brand gold. */
+  --tc-chart-accent: #0a48d6;
+  --tc-node-active: 10, 72, 214;
+  --tc-node-pending: 180, 83, 9;
+  --tc-node-suspended: 153, 27, 27;
+  --tc-node-retired: 26, 26, 26;
+}
+.hc.dark {
+  --tc-bg-page: #000000;
+  --tc-bg-surface: #000000;
+  --tc-bg-raised: #050505;
+  --tc-text-primary: #ffffff;
+  --tc-text-secondary: #e6e6e6;
+  --tc-border-default: #ffffff;
+  --tc-glass-bg: #000000;
+  --tc-glass-border: #ffffff;
+
+  /* Bright, saturated variants for AAA contrast against pure black. */
+  --tc-chart-accent: #ffd700;
+  --tc-node-active: 255, 215, 0;
+  --tc-node-pending: 253, 224, 71;
+  --tc-node-suspended: 252, 165, 165;
+  --tc-node-retired: 214, 211, 209;
+}
+/* HC removes glass blur + glow so meaning rests on contrast + shape alone */
+.hc .glass, .hc .glass-strong { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.hc [class*="shadow-glow"] { box-shadow: none; }
+
+@layer base {
+  * {
+    border-color: var(--tc-border-default);
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-page text-text-primary font-sans antialiased;
+    /* Gradient-mesh substrate — fixed, behind content, never hurts readability */
+    background-image: var(--tc-mesh, none);
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Ambient film-grain texture — the tactile "premium paper" finish behind
+     every surface. `--tc-noise-opacity` was already defined per theme
+     (0.025 light / 0.05 dark / 0 in HC, where all decoration is deliberately
+     suppressed) but had no rule consuming it. z-index:1 + fixed means it
+     paints above ordinary in-flow content but stays well under any
+     positioned chrome (header z-30/40, dialogs, toasts, command palette
+     z-100) — grain over content, never over UI that needs full clarity. */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: var(--tc-noise-opacity);
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+  }
+  @media print {
+    body::after { display: none; }
+  }
+
+  /* Premium focus ring — never removed, only elevated (WCAG 2.4.7 / spec §12) */
+  :focus-visible {
+    outline: 2px solid var(--tc-focus-ring);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  /* Refined selection + scrollbar for the premium feel */
+  ::selection {
+    background: rgba(212, 175, 55, 0.28);
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--tc-border-default);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--tc-text-secondary);
+    background-clip: padding-box;
+  }
+
+  h1, h2, h3 {
+    @apply font-display;
+    letter-spacing: -0.02em;
+  }
+
+  /* Numeric tabular alignment for counters/metrics */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Reduced-motion parity (spec §13): all motion collapses to quick fades */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* ── Modal entrance (Dialog/ConfirmDialog) — native <dialog>, CSS-only ─────
+   * @starting-style + `allow-discrete` lets a `display:none → block` element
+   * transition on open. Scoped to entry only (closing stays the native
+   * instant close) — deliberately: a modal that animates in but not out
+   * reads as premium without adding motion where it isn't earning its keep.
+   * prefers-reduced-motion is handled by the global transition-duration
+   * override above, so this needs no separate reduced-motion branch. */
+  dialog {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    transition: opacity 300ms cubic-bezier(0.16, 1, 0.3, 1),
+                transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
+                overlay 300ms allow-discrete,
+                display 300ms allow-discrete;
+  }
+  dialog::backdrop {
+    opacity: 1;
+    transition: opacity 300ms cubic-bezier(0.16, 1, 0.3, 1),
+                overlay 300ms allow-discrete,
+                display 300ms allow-discrete;
+  }
+  @starting-style {
+    dialog[open] {
+      opacity: 0;
+      transform: scale(0.96) translateY(8px);
+    }
+    dialog[open]::backdrop {
+      opacity: 0;
+    }
+  }
+
+  /* ── Glass surface — frosted, bordered, subtly luminous ───────────────────
+   * backdrop-filter blur is one of the most GPU-expensive CSS effects, and
+   * `.glass`/`.glass-strong` appear dozens of times per view (header, sidebar,
+   * cards, dropdowns, the mobile drawer scrim). Full-strength blur costs the
+   * same regardless of viewport, so budget phones pay desktop-GPU prices for
+   * an effect that's least appreciated on a small screen anyway — halving
+   * the radius under 640px cuts real compositing cost on low-end devices
+   * while keeping the frosted look recognizable. */
+  .glass {
+    background: var(--tc-glass-bg);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
+    border: 1px solid var(--tc-glass-border);
+  }
+  .glass-strong {
+    background: var(--tc-glass-bg);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    backdrop-filter: blur(24px) saturate(160%);
+    border: 1px solid var(--tc-glass-border);
+  }
+  @media (max-width: 640px) {
+    .glass {
+      -webkit-backdrop-filter: blur(8px) saturate(140%);
+      backdrop-filter: blur(8px) saturate(140%);
+    }
+    .glass-strong {
+      -webkit-backdrop-filter: blur(12px) saturate(160%);
+      backdrop-filter: blur(12px) saturate(160%);
+    }
+  }
+
+  /* ── Gradient-mesh aurora layer (decorative, behind content) ─────────────── */
+  .mesh-bg {
+    position: absolute;
+    inset: -20%;
+    z-index: 0;
+    pointer-events: none;
+    background-image: theme("backgroundImage.mesh-primary");
+    opacity: var(--tc-mesh-opacity);
+    filter: blur(40px);
+  }
+  .mesh-bg[data-animate="true"] {
+    animation: aurora-drift 18s ease-in-out infinite;
+  }
+
+  /* ── Faint grid overlay for spatial depth ────────────────────────────────── */
+  .grid-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image: theme("backgroundImage.grid-fade");
+    background-size: 48px 48px;
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black, transparent 75%);
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black, transparent 75%);
+  }
+
+  /* ── Ambient glow behind hero elements ───────────────────────────────────── */
+  .glow-ambient {
+    position: relative;
+  }
+  .glow-ambient::before {
+    content: "";
+    position: absolute;
+    inset: -30% -10%;
+    z-index: -1;
+    background: radial-gradient(closest-side, rgba(212, 175, 55, 0.26), transparent);
+    filter: blur(40px);
+    pointer-events: none;
+  }
+
+  /* ── Gradient text for premium headlines ─────────────────────────────────── */
+  .text-gradient {
+    background: linear-gradient(120deg, var(--tc-text-primary) 8%, #e8c96b 52%, #d4af37);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  /* ── Skeleton shimmer (premium loading) ──────────────────────────────────── */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--tc-border-default);
+    border-radius: 10px;
+  }
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+    animation: shimmer 1.6s infinite;
+  }
+
+  /* ── Embossed typography — credential titles (luxury credential redesign) ── */
+  .emboss {
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.15), 0 -1px 1px rgba(0, 0, 0, 0.35);
+  }
+  .dark .emboss {
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.06), 0 -1px 1px rgba(0, 0, 0, 0.6);
+  }
+  .hc .emboss {
+    text-shadow: none; /* HC theme: clarity over depth */
+  }
+
+  /* ── Animated conic border (for featured cards / CTAs) ───────────────────── */
+  .border-gradient {
+    position: relative;
+    background:
+      linear-gradient(var(--tc-bg-surface), var(--tc-bg-surface)) padding-box,
+      linear-gradient(120deg, rgba(212, 175, 55, 0.55), rgba(232, 201, 107, 0.5), rgba(184, 145, 43, 0.4)) border-box;
+    border: 1px solid transparent;
+    background-size: 200% 200%;
+    animation: border-flow 6s ease infinite;
+  }
+}
+
+@layer utilities {
+  /* Skip link (spec §12.1) */
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50
+      focus:rounded-md focus:bg-surface focus:px-3 focus:py-2 focus:shadow-md;
+  }
+  /* Lift-on-hover interaction primitive */
+  .lift {
+    @apply transition-all duration-standard ease-out-expo;
+  }
+  .lift:hover {
+    transform: translateY(-3px);
+  }
+
+  /* Trust-marquee: fade both edges so chips dissolve, never hard-cut */
+  .marquee-mask {
+    -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+    mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+  }
+  /* Pause the scroll on hover so users can read a chip */
+  .marquee-mask:hover .animate-marquee {
+    animation-play-state: paused;
+  }
+
+  /* Live network dot — steady gold with a soft breathing ring */
+  .status-dot {
+    position: relative;
+    display: inline-block;
+    height: 0.5rem;
+    width: 0.5rem;
+    border-radius: 9999px;
+    background: #d4af37;
+    box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.18);
+  }
+  .status-dot::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: rgba(212, 175, 55, 0.5);
+    animation: pulse-ring 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+  .hc .status-dot::after,
+  .status-dot[data-live="false"]::after {
+    animation: none;
+  }
+  .status-dot[data-live="false"] {
+    background: var(--tc-text-secondary);
+    box-shadow: 0 0 0 3px rgba(120, 120, 120, 0.14);
+  }
+}
+
+/* ── Professional printing mode (luxury credential redesign) ────────────────
+ * "Export PDF" is the browser's native print-to-PDF — no client-side
+ * rasterization dependency. These rules isolate a `.print-credential` node
+ * on the page and force solid, high-contrast surfaces: glass blur doesn't
+ * render reliably on paper, and print must never depend on the viewer's
+ * light/dark theme for legibility.
+ */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-credential,
+  .print-credential * {
+    visibility: visible;
+  }
+  .print-credential {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+  }
+  .print-credential .glass,
+  .print-credential .glass-strong {
+    background: #ffffff !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    border-color: #000 !important;
+    box-shadow: none !important;
+    color: #000 !important;
+  }
+  .print-credential * {
+    color: #000 !important;
+    text-shadow: none !important;
+  }
+  .print-credential .border-gradient {
+    animation: none !important;
+    background: #fff !important;
+    border: 2px solid #000 !important;
+  }
+}

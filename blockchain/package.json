@@ -1,0 +1,51 @@
+{
+  "name": "@trustchain/blockchain",
+  "version": "1.0.0",
+  "description": "TrustChain blockchain layer — issuer registry, Merkle certificate anchoring, and revocation status lists (UUPS upgradeable, per TDD §7-8)",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "hardhat compile",
+    "clean": "hardhat clean",
+    "test": "hardhat test",
+    "test:gas": "REPORT_GAS=true hardhat test",
+    "coverage": "hardhat coverage",
+    "lint": "solhint 'contracts/**/*.sol' && eslint . --ext .ts",
+    "node:local": "hardhat node",
+    "deploy:local": "hardhat run scripts/deploy.ts --network localhost",
+    "inspect:local": "hardhat run scripts/inspect-local.ts --network localhost",
+    "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",
+    "deploy:amoy": "hardhat run scripts/deploy.ts --network amoy",
+    "deploy:polygon": "hardhat run scripts/deploy.ts --network polygon",
+    "verify:sepolia": "hardhat run scripts/verify.ts --network sepolia",
+    "verify:amoy": "hardhat run scripts/verify.ts --network amoy",
+    "upgrade": "hardhat run scripts/upgrade.ts",
+    "seed:local": "hardhat run scripts/seed.ts --network localhost",
+    "size": "hardhat size-contracts"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts-upgradeable": "^5.0.2",
+    "@openzeppelin/hardhat-upgrades": "^3.2.0",
+    "@types/chai": "^4.3.16",
+    "@types/mocha": "^10.0.7",
+    "@types/node": "^20.14.0",
+    "chai": "^4.4.1",
+    "dotenv": "^16.4.5",
+    "eslint": "^8.57.0",
+    "ethers": "^6.13.0",
+    "hardhat": "^2.22.6",
+    "hardhat-contract-sizer": "^2.10.0",
+    "solhint": "^5.0.1",
+    "solidity-coverage": "^0.8.12",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.3"
+  },
+  "dependencies": {
+    "axios": "^1.7.2",
+    "form-data": "^4.0.0"
+  }
+}

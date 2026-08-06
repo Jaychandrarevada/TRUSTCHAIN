@@ -1,0 +1,60 @@
+# ─────────────────────────── Secrets — NEVER commit ───────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+**/mock_chain_state.json
+
+# ─────────────────────────────── Dependencies ─────────────────────────────────
+node_modules/
+**/node_modules/
+.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.egg-info/
+
+# ─────────────────────────── Build / generated output ─────────────────────────
+dist/
+**/dist/
+build/
+frontend/dist/
+blockchain/artifacts/
+blockchain/cache/
+blockchain/typechain-types/
+backend/instance/
+*.db
+*.sqlite3
+
+# Local-only chain deployment records (public deployments are committed)
+blockchain/deployments/localhost.json
+blockchain/deployments/hardhat.json
+blockchain/deployments/*.seed.json
+
+# ─────────────────────────────── Test / coverage ──────────────────────────────
+coverage/
+**/coverage/
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+qa/reports/**/*.json
+qa/reports/**/*.html
+cypress/videos/
+cypress/screenshots/
+
+# ─────────────────────────────── Logs / temp ──────────────────────────────────
+*.log
+logs/
+pip-install*.log
+install.log
+server.log
+
+# ─────────────────────────────── Editor / OS ──────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp

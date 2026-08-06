@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#070707" />
+    <!-- Gold shield favicon (Black & Gold brand) -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23D4AF37' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='24' height='24' rx='5' fill='%23070707' stroke='none'/%3E%3Cpath d='M12 4l6 2v5c0 3.5-2.5 6-6 7-3.5-1-6-3.5-6-7V6z'/%3E%3Cpath d='M9 12l2 2 4-4'/%3E%3C/svg%3E" />
+    <meta name="description" content="TrustChain — certificates that prove themselves. Issue, hold, and verify tamper-proof credentials sealed on the blockchain." />
+    <title>TrustChain — Certificates that prove themselves</title>
+    <!-- Fonts are self-hosted via @fontsource (imported in main.tsx) — no CDN. -->
+    <!-- Theme boot BEFORE paint: no light/dark flash (UI/UX spec §11.5) -->
+    <script>
+      (function () {
+        var stored = localStorage.getItem("tc-theme");
+        // Black & Gold brand: dark-first by default (luxury), unless user chose otherwise.
+        var mode = stored || "dark";
+        var root = document.documentElement;
+        if (mode === "dark" || mode === "oled") root.classList.add("dark");
+        if (mode === "oled") root.classList.add("oled");
+        if (mode === "hc") root.classList.add("hc");
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
