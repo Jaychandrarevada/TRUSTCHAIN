@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { miscApi, walletApi } from "@/services/api";
 import { ApiError } from "@/services/http";
-import { formatDate, truncateHash } from "@/utils";
+import { cn, formatDate, truncateHash } from "@/utils";
 import { CREDENTIAL_CATEGORIES, categoryForType, type CredentialCategory } from "@/constants";
 import { computeHolderTrustScore } from "@/lib/trustScore";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,7 @@ export default function WalletHome() {
   const queryClient = useQueryClient();
   const [activeCategory, setActiveCategory] = useState<CredentialCategory | "All">("All");
   const [query, setQuery] = useState("");
+  const [view, setView] = useState<"grid" | "timeline">("grid");
 
   const credentials = useQuery({ queryKey: ["wallet", "credentials"], queryFn: walletApi.credentials });
   const shares = useQuery({ queryKey: ["wallet", "shares"], queryFn: walletApi.listShares });
@@ -89,6 +90,19 @@ export default function WalletHome() {
   const trust = computeHolderTrustScore(
     all, profile.data?.email_verified ?? false, walletLinked, verifications.data?.data.length ?? 0,
   );
+
+  /** Credentials bucketed by claim year, newest first. Unclaimed ones are
+   *  grouped honestly rather than given a fabricated date to sort by. */
+  const byYear = useMemo(() => {
+    const map = new Map<string, CertificateSummary[]>();
+    for (const cert of filtered) {
+      const year = cert.claimed_at ? String(new Date(cert.claimed_at).getFullYear()) : "Not yet claimed";
+      if (!map.has(year)) map.set(year, []);
+      map.get(year)!.push(cert);
+    }
+    return [...map.entries()].sort((a, b) =>
+      a[0] === "Not yet claimed" ? 1 : b[0] === "Not yet claimed" ? -1 : Number(b[0]) - Number(a[0]));
+  }, [filtered]);
 
   const tabs: ("All" | CredentialCategory)[] = ["All", ...CREDENTIAL_CATEGORIES, "Other credentials"];
 
@@ -162,6 +176,23 @@ export default function WalletHome() {
           </div>
         </div>
 
+        {/* View switch — same credentials, two readings: a grid to browse, a
+            timeline to see the record accumulate over a lifetime. */}
+        <div role="group" aria-label="Credential view" className="mb-3 inline-flex rounded-lg border border-border-default/60 p-0.5">
+          {([["grid", "Grid", LayoutGrid], ["timeline", "Timeline", Clock]] as const).map(([mode, label, Icon]) => (
+            <button
+              key={mode}
+              type="button"
+              aria-pressed={view === mode}
+              onClick={() => setView(mode)}
+              className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors",
+                view === mode ? "bg-primary-500/15 text-text-primary" : "text-text-secondary hover:text-text-primary")}
+            >
+              <Icon className="h-3.5 w-3.5" aria-hidden /> {label}
+            </button>
+          ))}
+        </div>
+
         <div role="tablist" aria-label="Credential category" className="mb-4 flex flex-wrap gap-2">
           {tabs.map((tab) => {
             const count = tab === "All" ? all.length : (byCategory.get(tab)?.length ?? 0);
@@ -203,13 +234,48 @@ export default function WalletHome() {
               : "Try a different search term."}
           />
         )}
-        <Stagger className="grid gap-3 md:grid-cols-2">
-          {filtered.map((cert) => (
-            <StaggerItem key={cert.cert_uid}>
-              <CertificateCard cert={cert} to={`/wallet/certificates/${cert.cert_uid}`} />
-            </StaggerItem>
-          ))}
-        </Stagger>
+        {view === "grid" ? (
+          <Stagger className="grid gap-3 md:grid-cols-2">
+            {filtered.map((cert) => (
+              <StaggerItem key={cert.cert_uid}>
+                <CertificateCard cert={cert} to={`/wallet/certificates/${cert.cert_uid}`} />
+              </StaggerItem>
+            ))}
+          </Stagger>
+        ) : (
+          /* Timeline view — the same credentials as a lifelong record, newest
+             first, grouped by the year they were claimed. Credentials with no
+             claim date group under "Not yet claimed" rather than being given
+             an invented date to sort by. */
+          <Stagger className="flex flex-col gap-6">
+            {byYear.map(([year, certs]) => (
+              <StaggerItem key={year}>
+                <div className="flex items-center gap-3">
+                  <h3 className="font-display text-sm font-semibold tabular">{year}</h3>
+                  <span aria-hidden className="h-px flex-1 bg-border-default/70" />
+                  <span className="text-xs text-text-secondary">
+                    {certs.length} credential{certs.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <ol className="mt-3 flex flex-col">
+                  {certs.map((cert, i) => (
+                    <li key={cert.cert_uid} className="relative flex gap-3 pb-3 last:pb-0">
+                      {i < certs.length - 1 && (
+                        <span aria-hidden
+                          className="absolute left-[5px] top-4 h-[calc(100%-0.5rem)] w-px bg-text-secondary/25" />
+                      )}
+                      <span aria-hidden
+                        className="relative z-10 mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full border border-primary-500 bg-primary-500/20" />
+                      <div className="min-w-0 flex-1">
+                        <CertificateCard cert={cert} to={`/wallet/certificates/${cert.cert_uid}`} />
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </StaggerItem>
+            ))}
+          </Stagger>
+        )}
       </section>
 
       {/* ── Verification History (timeline) ─────────────────────────────── */}
