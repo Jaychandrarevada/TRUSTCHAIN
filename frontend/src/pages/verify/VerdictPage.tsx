@@ -4,6 +4,7 @@
  * seven-check breakdown, collapsed blockchain proof. No login, ever (BR-16).
  */
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
 import { EASE } from "@/lib/motion";
@@ -14,14 +15,17 @@ import { CheckList, VerdictPanel } from "@/components/domain/verdict";
 import { VerificationCeremony } from "@/components/domain/VerificationCeremony";
 import { LuxuryCredential } from "@/components/domain/LuxuryCredential";
 import { AiExplainButton } from "@/components/domain/AiExplain";
+import { TrustProofPanel } from "@/components/domain/TrustProofPanel";
 import { MeshBackground } from "@/components/motion/MeshBackground";
-import { aiApi } from "@/services/api";
+import { aiApi, miscApi } from "@/services/api";
 import type { VerdictResponse } from "@/types";
 import { Link } from "react-router-dom";
 
 const VERIFY_BASE = import.meta.env.VITE_VERIFY_BASE_URL ?? window.location.origin;
 
 export function VerdictBody({ data }: { data: VerdictResponse }) {
+  // Real network identity for the trust proof — never assumed.
+  const chain = useQuery({ queryKey: ["chain", "info"], queryFn: miscApi.chainInfo, staleTime: 300_000 });
   const fields = data.certificate.disclosed_fields ?? {};
   const { program, holder_name, ...restFields } = fields as Record<string, unknown>;
   const certUid = data.certificate.cert_uid;
@@ -64,6 +68,8 @@ export function VerdictBody({ data }: { data: VerdictResponse }) {
           />
         </CardContent>
       </Card>
+
+      <TrustProofPanel data={data} chain={chain.data ?? null} />
     </div>
   );
 }
