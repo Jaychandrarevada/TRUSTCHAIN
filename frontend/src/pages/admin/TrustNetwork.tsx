@@ -34,7 +34,7 @@ import type { InstitutionNetworkRow } from "@/types";
 import { computeTrustScore } from "@/lib/trustScore";
 import { Badge, CopyField, Skeleton, EmptyState } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
-import { formatPercent } from "@/utils";
+import { cn, formatPercent } from "@/utils";
 
 // ── Layout math (pure, no physics simulation — see file header) ─────────────
 
@@ -48,6 +48,12 @@ interface Cluster {
   cx: number; cy: number;
   members: Placed[];
 }
+
+/** Every status a tenant can hold, in the order they appear in the filter. */
+const ALL_STATUSES = ["active", "pending_kyb", "suspended", "retired"] as const;
+const STATUS_LABEL: Record<InstitutionNetworkRow["status"], string> = {
+  active: "Active", pending_kyb: "Pending KYB", suspended: "Suspended", retired: "Retired",
+};
 
 const LAYOUT_W = 900;
 const LAYOUT_H = 640;
@@ -112,6 +118,10 @@ function useNetworkCanvas(
   clusters: Cluster[],
   placedAll: Placed[],
   query: string,
+  /** Statuses currently shown; anything outside it is dimmed, not removed —
+   *  a filtered network still shows its full shape, so you can see what you
+   *  are excluding rather than being handed a silently smaller graph. */
+  statuses: Set<InstitutionNetworkRow["status"]>,
   view: { current: { scale: number; panX: number; panY: number } },
 ) {
   const reduced = useReducedMotion();
@@ -172,9 +182,10 @@ function useNetworkCanvas(
 
       // Institution nodes
       for (const p of placedAll) {
-        const dim = q.length > 0
+        const missesQuery = q.length > 0
           && !p.row.legal_name.toLowerCase().includes(q)
           && !p.row.slug.toLowerCase().includes(q);
+        const dim = missesQuery || !statuses.has(p.row.status);
         const breathe = reduced ? 1 : Math.sin(elapsed * 1.4 + p.x * 0.01) * 0.15 + 0.85;
         const rgb = colors[p.row.status];
         const alpha = dim ? 0.15 : 0.95;
@@ -202,7 +213,7 @@ function useNetworkCanvas(
 
     return () => { cancelAnimationFrame(raf); ro.disconnect(); mo.disconnect(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clusters, placedAll, query, reduced]);
+  }, [clusters, placedAll, query, statuses, reduced]);
 }
 
 // ── Profile drawer ────────────────────────────────────────────────────────
@@ -362,6 +373,8 @@ export default function TrustNetwork() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<InstitutionNetworkRow | null>(null);
   const [query, setQuery] = useState("");
+  const [statuses, setStatuses] = useState<Set<InstitutionNetworkRow["status"]>>(
+    () => new Set(ALL_STATUSES));
   const [, forceTick] = useState(0); // re-renders the zoom buttons' surrounding UI after a ref-only zoom change
 
   const view = useRef({ scale: 1, panX: 0, panY: 0 });
@@ -371,7 +384,7 @@ export default function TrustNetwork() {
   const clusters = useMemo(() => buildLayout(rows), [rows]);
   const placedAll = useMemo(() => clusters.flatMap((c) => c.members), [clusters]);
 
-  useNetworkCanvas(canvasRef, wrapRef, clusters, placedAll, query, view);
+  useNetworkCanvas(canvasRef, wrapRef, clusters, placedAll, query, statuses, view);
 
   const zoomBy = (factor: number) => {
     view.current.scale = Math.min(3, Math.max(0.4, view.current.scale * factor));
@@ -437,6 +450,43 @@ export default function TrustNetwork() {
           <Button variant="ghost" size="sm" onClick={() => zoomBy(1.2)} aria-label="Zoom in"><ZoomIn className="h-4 w-4" aria-hidden /></Button>
           <Button variant="ghost" size="sm" onClick={() => zoomBy(1 / 1.2)} aria-label="Zoom out"><ZoomOut className="h-4 w-4" aria-hidden /></Button>
         </div>
+      </div>
+
+      {/* Status filter — counts come from the real rows, so a status with no
+          institutions reads 0 rather than being hidden. */}
+      <div role="group" aria-label="Filter by status" className="flex flex-wrap items-center gap-2">
+        {ALL_STATUSES.map((st) => {
+          const on = statuses.has(st);
+          const count = rows.filter((r) => r.status === st).length;
+          return (
+            <button
+              key={st}
+              type="button"
+              aria-pressed={on}
+              onClick={() => setStatuses((prev) => {
+                const next = new Set(prev);
+                next.has(st) ? next.delete(st) : next.add(st);
+                return next;
+              })}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                on ? "border-primary-500/60 bg-primary-500/15 text-text-primary"
+                  : "border-border-default/60 text-text-secondary hover:text-text-primary",
+              )}
+            >
+              <span aria-hidden className="h-2 w-2 rounded-full"
+                style={{ background: `rgb(var(--tc-node-${st === "pending_kyb" ? "pending" : st}))`, opacity: on ? 1 : 0.4 }} />
+              {STATUS_LABEL[st]}
+              <span className="tabular text-text-secondary">{count}</span>
+            </button>
+          );
+        })}
+        {statuses.size < ALL_STATUSES.length && (
+          <button type="button" onClick={() => setStatuses(new Set(ALL_STATUSES))}
+            className="text-xs text-primary-800 hover:underline dark:text-primary-400">
+            Show all
+          </button>
+        )}
       </div>
 
       <div ref={wrapRef} className="glass relative h-[640px] w-full overflow-hidden rounded-2xl border border-border-default/60">
