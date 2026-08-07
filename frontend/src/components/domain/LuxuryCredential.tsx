@@ -113,6 +113,35 @@ export function LuxuryCredential({
             animate-sheen motion-reduce:hidden print:hidden"
         />
 
+        {/* Security watermark — the certificate's own ID, tiled diagonally.
+            Deliberately the real UID rather than a generic mark: a screenshot
+            or photocopy then carries the identifier of the record it came
+            from, which is what makes a watermark a security feature instead
+            of decoration. Kept faint enough not to touch text contrast, and
+            it PRINTS (unlike the sheen), because paper is where an
+            unverifiable copy actually circulates. aria-hidden — the ID is
+            already announced as real text in the credential body. */}
+        <svg
+          aria-hidden
+          className="pointer-events-none absolute inset-0 h-full w-full text-text-primary opacity-[0.018] dark:opacity-[0.022]"
+          focusable="false"
+        >
+          <defs>
+            <pattern id={`wm-${certUid}`} width="380" height="200"
+              patternUnits="userSpaceOnUse" patternTransform="rotate(-24)">
+              <text x="0" y="34" fill="currentColor"
+                style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.22em" }}>
+                {certUid}
+              </text>
+              <text x="0" y="150" fill="currentColor"
+                style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.22em" }}>
+                VERIFY AT TRUSTCHAIN
+              </text>
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill={`url(#wm-${certUid})`} />
+        </svg>
+
         <div className="relative flex flex-col gap-7 p-6 sm:p-10">
           {/* Header — dual seals + live verdict */}
           <div className="flex flex-wrap items-start justify-between gap-4">
