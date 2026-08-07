@@ -239,15 +239,21 @@ export function PublicLayout() {
       <ScrollProgress />
       <a href="#main" className="skip-link">Skip to content</a>
       <header className="sticky top-0 z-40 glass border-b border-border-default/60">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-          <Logo />
-          <nav aria-label="Main" className="flex items-center gap-4 text-sm text-text-secondary sm:gap-6">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
+          {/* shrink-0 across the header: without it the flex children compress
+              below their content at mid widths, which ran the wordmark into the
+              first nav link and wrapped "How it works" and "Sign in" onto two
+              lines somewhere around 900px. */}
+          <div className="shrink-0"><Logo /></div>
+          <nav aria-label="Main" className="flex shrink-0 items-center gap-4 whitespace-nowrap text-sm text-text-secondary lg:gap-6">
             <NavLink to="/verify" className="transition-colors hover:text-text-primary">Verify</NavLink>
-            <a href="/#how-it-works" className="hidden transition-colors hover:text-text-primary sm:inline">How it works</a>
-            <a href="/#faq" className="hidden transition-colors hover:text-text-primary sm:inline">FAQ</a>
+            {/* Secondary anchors wait for lg: between sm and lg the row is already
+                carrying the network chip, search, theme and two auth controls. */}
+            <a href="/#how-it-works" className="hidden transition-colors hover:text-text-primary lg:inline">How it works</a>
+            <a href="/#faq" className="hidden transition-colors hover:text-text-primary lg:inline">FAQ</a>
           </nav>
-          <div className="flex items-center gap-2">
-            <NetworkStatus className="hidden md:inline-flex" />
+          <div className="flex shrink-0 items-center gap-2">
+            <NetworkStatus className="hidden lg:inline-flex" />
             <CommandTrigger />
             <ThemeToggle />
             {isAuthenticated ? (

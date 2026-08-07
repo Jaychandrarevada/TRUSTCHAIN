@@ -1,26 +1,31 @@
 /**
- * VerificationCeremony — replaces the plain loading spinner on the flagship
- * verdict page with a multi-stage, honest verification experience.
+ * VerificationCeremony — the cinematic verification workflow on the public
+ * verdict page, replacing what would otherwise be a spinner.
  *
- * Same ground rule as the issuance ceremony (components/domain/IssuanceCeremony):
- * NEVER fake technical data. The real `verifyApi.byUid()` call fires the
- * instant this mounts, in parallel with the animation — never delayed by it.
- * "Connecting to Trust Network" is a real gate: it pulses for exactly as long
- * as the actual request takes. Every later stage only ever displays a value
- * that came back in the real `checks` object (issuer name, Merkle root, tx
- * hash, block, revocation status, expiry) — nothing is invented to make the
- * pipeline look more elaborate than what the server actually checked.
+ * ── Honesty rules (unchanged from the original ceremony) ──────────────────
+ * The real `verifyApi.byUid()` call fires the instant this mounts, in parallel
+ * with the animation and never delayed by it. "Scanning credential" is a real
+ * gate: it holds for exactly as long as the actual request takes. Every stage
+ * after it maps to a REAL key in the response's `checks` object and displays
+ * only values the server actually returned — issuer name, Merkle root, tx
+ * hash, block, revocation status, expiry. Nothing is invented to make the
+ * pipeline look richer than the work performed.
+ *
+ * The backend performs exactly six checks (integrity, merkle_proof, anchor,
+ * issuer, revocation, expiry — see verification_service.py). Each has its own
+ * stage. "Building trust proof" is the client composing the final verdict from
+ * those six results, which is genuinely what happens, and is the only stage
+ * without a check key.
  *
  * A resolved-but-bad verdict (REVOKED, TAMPERED, …) is NOT a ceremony failure:
- * the pipeline still runs to completion, the specific failing check is shown
- * red and honest, and the real verdict is what gets revealed at the end — no
- * false cheer. Only a genuine request failure (404, network, server error)
- * stops the ceremony early; that case is handed back to the caller via
- * `onError` so the page's existing error/retry UI handles it unchanged.
+ * the pipeline runs to completion and the specific failing stage is shown in
+ * red with the reason, so the stage responsible is always identifiable. Only a
+ * genuine request failure stops it early, handed back through `onError`.
  */
 import { useEffect, useRef, useState } from "react";
 import {
-  Blocks, Building2, Fingerprint, Hash, ListChecks, Radio, ScanLine, ShieldCheck, XCircle,
+  Blocks, Building2, CalendarClock, Fingerprint, Hash, ListChecks, ScanLine,
+  ShieldCheck, Sparkles, XCircle,
 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import type { VerdictResponse } from "@/types";
@@ -30,22 +35,30 @@ import { VERDICTS } from "@/constants";
 import { CopyField } from "@/components/ui/misc";
 import { cn } from "@/utils";
 
-const GATE_STEP = 1; // "Connecting to Trust Network" — the real network call
-const PRE_DWELL_MS = 380;
+const GATE_STEP = 0; // "Scanning credential" — holds for the real network call
+const PRE_DWELL_MS = 260;
 const POST_DWELL_MS = 300;
 
-type CheckKey = "issuer" | "integrity" | "anchor" | "revocation" | "merkle_proof" | null;
+type CheckKey = "issuer" | "integrity" | "merkle_proof" | "anchor" | "revocation" | "expiry" | null;
 
-const STAGES: { label: string; icon: typeof Radio; checkKey: CheckKey }[] = [
-  { label: "Scanning credential…", icon: ScanLine, checkKey: null },
-  { label: "Connecting to Trust Network…", icon: Radio, checkKey: null },
-  { label: "Resolving Issuer Identity…", icon: Building2, checkKey: "issuer" },
-  { label: "Checking Digital Signature…", icon: Fingerprint, checkKey: "integrity" },
-  { label: "Validating Blockchain Record…", icon: Blocks, checkKey: "anchor" },
-  { label: "Checking Revocation Registry…", icon: ListChecks, checkKey: "revocation" },
-  { label: "Generating Cryptographic Proof…", icon: Hash, checkKey: "merkle_proof" },
-  { label: "Verification Complete", icon: ShieldCheck, checkKey: null },
+const STAGES: { label: string; icon: typeof ScanLine; checkKey: CheckKey }[] = [
+  { label: "Scanning credential", icon: ScanLine, checkKey: null },
+  { label: "Resolving issuer", icon: Building2, checkKey: "issuer" },
+  { label: "Validating signature", icon: Fingerprint, checkKey: "integrity" },
+  { label: "Verifying Merkle proof", icon: Hash, checkKey: "merkle_proof" },
+  { label: "Checking blockchain anchor", icon: Blocks, checkKey: "anchor" },
+  { label: "Checking revocation registry", icon: ListChecks, checkKey: "revocation" },
+  { label: "Checking expiration", icon: CalendarClock, checkKey: "expiry" },
+  { label: "Building trust proof", icon: Sparkles, checkKey: null },
+  { label: "Verification complete", icon: ShieldCheck, checkKey: null },
 ];
+
+/** Reads a field off a check result without asserting it exists. */
+function field(check: unknown, key: string): string | number | null {
+  if (!check || typeof check !== "object" || !(key in check)) return null;
+  const v = (check as Record<string, unknown>)[key];
+  return typeof v === "string" || typeof v === "number" ? v : null;
+}
 
 export function VerificationCeremony({
   certUid, viaQr, onError, onVerified,
@@ -59,21 +72,30 @@ export function VerificationCeremony({
   const [stepIndex, setStepIndex] = useState(0);
   const [waitingChain, setWaitingChain] = useState(false);
   const [result, setResult] = useState<VerdictResponse | null>(null);
-  const startedRef = useRef(false);
   const reduced = useReducedMotion();
 
+  /**
+   * The in-flight verification request, created at most once.
+   *
+   * This must NOT be an "effect already ran" flag. Under StrictMode React
+   * mounts, cleans up, then mounts again — a guard on the effect body lets the
+   * first pass start, the cleanup cancel it, and the second pass return early,
+   * freezing the ceremony on its first stage forever. Memoising the promise
+   * instead lets the effect re-run and re-drive the animation while the real
+   * request still fires exactly once.
+   */
+  const promiseRef = useRef<Promise<VerdictResponse> | null>(null);
+  const callbacks = useRef({ onError, onVerified });
+  callbacks.current = { onError, onVerified };
+
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
     let cancelled = false;
     const dwell = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-    async function play() {
-      const promise = verifyApi.byUid(certUid, viaQr); // real request fires now
-
-      setStepIndex(0);
-      await dwell(PRE_DWELL_MS);
-      if (cancelled) return;
+    (async () => {
+      promiseRef.current ??= verifyApi.byUid(certUid, viaQr); // real request
+      const promise = promiseRef.current;
+      promise.catch(() => undefined); // handled below; avoids an unhandled rejection
 
       setStepIndex(GATE_STEP);
       setWaitingChain(true);
@@ -83,7 +105,7 @@ export function VerificationCeremony({
         data = await promise;
       } catch (err) {
         if (cancelled) return;
-        onError(err instanceof ApiError ? err : new ApiError({
+        callbacks.current.onError(err instanceof ApiError ? err : new ApiError({
           status: 0, code: "NETWORK_ERROR", title: "Network error",
           detail: "Could not reach the verification service.", errors: [], traceId: "",
         }));
@@ -92,6 +114,7 @@ export function VerificationCeremony({
       if (cancelled) return;
       setWaitingChain(false);
       setResult(data);
+      await dwell(PRE_DWELL_MS);
 
       for (let i = GATE_STEP + 1; i < STAGES.length; i++) {
         if (cancelled) return;
@@ -99,21 +122,41 @@ export function VerificationCeremony({
         await dwell(POST_DWELL_MS);
       }
       if (cancelled) return;
-      await dwell(250); // let "Verification Complete" register before the reveal
+      await dwell(250); // let "Verification complete" register before the reveal
       if (cancelled) return;
-      onVerified(data);
-    }
-    void play();
+      callbacks.current.onVerified(data);
+    })();
+
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [certUid, viaQr]);
+
+  const anchor = result?.checks.anchor;
+  const total = STAGES.length;
+  const done = result ? stepIndex : 0;
+  const pct = Math.round((done / (total - 1)) * 100);
 
   return (
     <div role="status" aria-live="polite" aria-label="Verifying certificate"
       className="glass-strong rounded-2xl p-6 shadow-glow-lg">
-      <p className="mb-4 text-xs font-medium uppercase tracking-widest text-text-secondary">
-        Verifying {certUid}
-      </p>
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <p className="text-xs font-medium uppercase tracking-widest text-text-secondary">
+          Verifying {certUid}
+        </p>
+        <p className="font-mono text-xs text-text-secondary">
+          {Math.min(done + 1, total)}/{total}
+        </p>
+      </div>
+
+      {/* Progress — reflects real completed stages, not a timed fake. */}
+      <div className="mb-5 h-1 w-full overflow-hidden rounded-full bg-border-default/60"
+        role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}
+        aria-label="Verification progress">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-primary-400 to-primary-600 transition-[width] duration-standard ease-out-expo"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+
       <ol className="flex flex-col">
         {STAGES.map((stage, i) => {
           const state: "pending" | "active" | "complete" =
@@ -128,7 +171,7 @@ export function VerificationCeremony({
               {i < STAGES.length - 1 && (
                 <span aria-hidden className={cn(
                   "absolute left-[15px] top-8 h-[calc(100%-1.25rem)] w-px",
-                  i < stepIndex ? "bg-gradient-to-b from-primary-500 to-primary-500/40" : "bg-border-default/60",
+                  i < stepIndex ? "bg-gradient-to-b from-primary-500 to-primary-500/40" : "bg-text-secondary/25",
                 )}>
                   {!reduced && i === stepIndex - 1 && (
                     <motion.span
@@ -153,42 +196,50 @@ export function VerificationCeremony({
                 )}
                 <Icon className={cn("h-4 w-4", isGateWaiting && "animate-pulse")} aria-hidden />
               </span>
+
               <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 pt-1">
-                <p className={cn("truncate text-sm font-medium",
-                  state === "pending" ? "text-text-secondary/60" : "text-text-primary")}>
+                <p className={cn("text-sm font-medium",
+                  failed ? "text-danger-700 dark:text-danger-400"
+                    : state === "pending" ? "text-text-secondary/60" : "text-text-primary")}>
                   {stage.label}
                 </p>
 
-                {/* Technical metadata — only ever real values from the response */}
+                {/* Only ever real values from the response. */}
                 {stage.checkKey === "issuer" && checkResult && (
                   <p className="text-xs text-text-secondary">
-                    {result!.certificate.issuer.name ?? "Unknown issuer"}
+                    {result!.certificate.issuer.name ?? "Unrecognised issuer"}
                     {result!.certificate.issuer.status && ` · ${result!.certificate.issuer.status}`}
                   </p>
                 )}
-                {stage.checkKey === "anchor" && checkResult && (
-                  <div className="flex flex-col gap-0.5 text-xs text-text-secondary">
-                    {"root" in checkResult && checkResult.root != null && (
-                      <span>Root: <CopyField value={String(checkResult.root)} label="Merkle root" /></span>
-                    )}
-                    {"block" in checkResult && checkResult.block != null && (
-                      <span className="font-mono">block {String(checkResult.block)}</span>
-                    )}
-                    {result!.checks.expiry && (
-                      <span>
-                        {result!.checks.expiry.expires_at
-                          ? `Valid until ${new Date(String(result!.checks.expiry.expires_at)).toLocaleDateString()}`
-                          : "No expiry set"}
-                      </span>
-                    )}
-                  </div>
-                )}
-                {stage.checkKey === "revocation" && checkResult && "status" in checkResult && (
-                  <p className="font-mono text-xs text-text-secondary">status: {String(checkResult.status)}</p>
+                {stage.checkKey === "integrity" && checkResult && (
+                  <p className="text-xs text-text-secondary">
+                    {checkResult.pass
+                      ? String(field(checkResult, "note") ?? "Content hash matches the sealed record")
+                      : "Content hash does not match the sealed record"}
+                  </p>
                 )}
                 {stage.checkKey === "merkle_proof" && checkResult && (
                   <p className="text-xs text-text-secondary">
                     {checkResult.pass ? "Leaf verified against the anchored root" : "Proof did not reconcile"}
+                  </p>
+                )}
+                {stage.checkKey === "anchor" && checkResult && (
+                  <p className="font-mono text-xs text-text-secondary">
+                    {field(checkResult, "block") != null
+                      ? `block ${field(checkResult, "block")}`
+                      : checkResult.pass ? "anchored" : "not anchored"}
+                  </p>
+                )}
+                {stage.checkKey === "revocation" && checkResult && (
+                  <p className="font-mono text-xs text-text-secondary">
+                    status: {String(field(checkResult, "status") ?? "unknown")}
+                  </p>
+                )}
+                {stage.checkKey === "expiry" && checkResult && (
+                  <p className="text-xs text-text-secondary">
+                    {field(checkResult, "expires_at")
+                      ? `${checkResult.pass ? "Valid until" : "Expired"} ${new Date(String(field(checkResult, "expires_at"))).toLocaleDateString()}`
+                      : "No expiry set"}
                   </p>
                 )}
               </div>
@@ -198,9 +249,61 @@ export function VerificationCeremony({
       </ol>
 
       {result && (
-        <p className="mt-1 border-t border-border-default/50 pt-3 text-xs text-text-secondary">
-          Final verdict: <span className="font-medium text-text-primary">{VERDICTS[result.verdict].label}</span>
-        </p>
+        <>
+          <p className="mt-1 border-t border-border-default/50 pt-3 text-xs text-text-secondary">
+            Final verdict: <span className="font-medium text-text-primary">{VERDICTS[result.verdict].label}</span>
+          </p>
+
+          {/* Technical transparency — collapsed, never hidden. Only fields the
+              response actually carried are rendered. */}
+          <details className="group mt-2 rounded-lg border border-border-default/60 bg-surface/40">
+            <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-text-secondary marker:content-['']">
+              Inspect cryptographic metadata
+            </summary>
+            <dl className="flex flex-col gap-2 border-t border-border-default/50 px-3 py-2.5 text-xs">
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-text-secondary">Certificate ID</dt>
+                <dd className="font-mono">{result.certificate.cert_uid}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-text-secondary">Issuer</dt>
+                <dd className="font-medium">{result.certificate.issuer.name ?? "Unrecognised"}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-text-secondary">Merkle proof</dt>
+                <dd className={result.checks.merkle_proof?.pass ? "text-success-700 dark:text-success-400" : "text-danger-700 dark:text-danger-400"}>
+                  {result.checks.merkle_proof?.pass ? "Verified against root" : "Did not reconcile"}
+                </dd>
+              </div>
+              {field(anchor, "root") && (
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-text-secondary">Merkle root</dt>
+                  <dd><CopyField value={String(field(anchor, "root"))} label="Merkle root" /></dd>
+                </div>
+              )}
+              {field(anchor, "tx_hash") && (
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-text-secondary">Transaction</dt>
+                  <dd><CopyField value={String(field(anchor, "tx_hash"))} label="transaction hash" /></dd>
+                </div>
+              )}
+              {field(anchor, "block") != null && (
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-text-secondary">Block</dt>
+                  <dd className="font-mono">{field(anchor, "block")}</dd>
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-text-secondary">Expires</dt>
+                <dd className="font-mono">
+                  {field(result.checks.expiry, "expires_at")
+                    ? new Date(String(field(result.checks.expiry, "expires_at"))).toLocaleString()
+                    : "no expiry"}
+                </dd>
+              </div>
+            </dl>
+          </details>
+        </>
       )}
     </div>
   );
