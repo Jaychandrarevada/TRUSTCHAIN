@@ -12,11 +12,13 @@
  * that governs every other surface in this codebase.
  */
 import { useQuery } from "@tanstack/react-query";
+import { useState, type ReactNode } from "react";
 import {
   Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import {
-  Blocks, Building2, FileCheck2, Network, ScanLine, ShieldCheck, Users,
+  Blocks, Building2, ChevronDown, FileCheck2, Gauge, Network, ScanLine,
+  ShieldAlert, ShieldCheck, Users,
 } from "lucide-react";
 import { adminApi, miscApi } from "@/services/api";
 import { SUPPORTED_CHAINS } from "@/constants";
@@ -28,6 +30,8 @@ import { Stagger, StaggerItem } from "@/components/motion";
 import { StatCard } from "@/components/domain/certificate";
 import { InsightsCard, derivePlatformInsights } from "@/components/domain/insights";
 import { NetworkStatusCard } from "@/components/NetworkStatus";
+import { computeTrustScore } from "@/lib/trustScore";
+import { cn } from "@/utils";
 import { Link } from "react-router-dom";
 
 const REFRESH_MS = 10_000;
@@ -112,6 +116,98 @@ function ActivityHeatmap({ cells }: { cells: { weekday: number; hour: number; co
         <span className="h-2.5 w-2.5 rounded-[2px] bg-primary-700" />
         <span>More</span>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Widget — a collapsible dashboard panel. Open state persists per widget, so
+ * an operator's layout survives the 10s refetch and a page reload; a dashboard
+ * that silently re-expands everything you closed is worse than one that never
+ * collapsed at all.
+ */
+function Widget({ id, icon: Icon, title, children, defaultOpen = true, className }: {
+  id: string; icon: typeof Blocks; title: string; children: ReactNode;
+  defaultOpen?: boolean; className?: string;
+}) {
+  const key = `tc-widget-${id}`;
+  const [open, setOpen] = useState(() => {
+    try { const v = localStorage.getItem(key); return v === null ? defaultOpen : v === "1"; }
+    catch { return defaultOpen; }
+  });
+  const toggle = () => setOpen((v) => {
+    try { localStorage.setItem(key, v ? "0" : "1"); } catch { /* private mode */ }
+    return !v;
+  });
+  return (
+    <Card glass hover className={className}>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">
+          <button type="button" onClick={toggle} aria-expanded={open}
+            className="flex w-full items-center gap-2 text-left">
+            <Icon className="h-4 w-4 shrink-0 text-primary-500" aria-hidden />
+            <span className="flex-1">{title}</span>
+            <ChevronDown className={cn("h-4 w-4 shrink-0 text-text-secondary transition-transform duration-standard",
+              open && "rotate-180")} aria-hidden />
+          </button>
+        </CardTitle>
+      </CardHeader>
+      {open && <CardContent>{children}</CardContent>}
+    </Card>
+  );
+}
+
+/** Score bands for the distribution histogram. */
+const BANDS = [
+  { label: "85–100", min: 85, tone: "bg-success-500" },
+  { label: "65–84", min: 65, tone: "bg-primary-500" },
+  { label: "40–64", min: 40, tone: "bg-warning-400" },
+  { label: "0–39", min: 0, tone: "bg-danger-700" },
+];
+
+/**
+ * Trust score distribution across every institution.
+ *
+ * Scores are computed client-side from the same real rows the trust network
+ * uses (lib/trustScore.ts) — this is a reputation summary, not a verification
+ * result, and it is labelled that way.
+ */
+function TrustScoreDistribution() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin", "institutions-network"],
+    queryFn: adminApi.institutionsNetwork,
+    staleTime: 60_000,
+  });
+  if (isLoading) return <Skeleton className="h-32 w-full" />;
+  const rows = data?.data ?? [];
+  if (rows.length === 0) {
+    return <EmptyState title="No institutions yet"
+      hint="Trust scores appear once an institution completes accreditation review." />;
+  }
+  const scores = rows.map((r) => computeTrustScore(r).score);
+  const buckets = BANDS.map((b, i) => {
+    const upper = i === 0 ? Infinity : BANDS[i - 1].min;
+    return { ...b, count: scores.filter((s) => s >= b.min && s < upper).length };
+  });
+  const max = Math.max(1, ...buckets.map((b) => b.count));
+  const mean = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      {buckets.map((b) => (
+        <div key={b.label} className="flex items-center gap-3 text-xs">
+          <span className="w-14 shrink-0 tabular text-text-secondary">{b.label}</span>
+          <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-border-default/60">
+            <div className={cn("h-full rounded-full transition-[width] duration-settle ease-out-expo", b.tone)}
+              style={{ width: `${(b.count / max) * 100}%` }} />
+          </div>
+          <span className="w-6 shrink-0 tabular text-right font-medium">{b.count}</span>
+        </div>
+      ))}
+      <p className="border-t border-border-default/50 pt-2 text-[11px] text-text-secondary">
+        Mean {mean} across {rows.length} institution{rows.length === 1 ? "" : "s"}. Trust score is a
+        reputation signal computed from platform records — it never affects whether a certificate verifies.
+      </p>
     </div>
   );
 }
@@ -278,6 +374,49 @@ export default function PlatformAnalytics() {
             )}
           </CardContent>
         </Card>
+      </div>
+
+      {/* Fraud detection feed + trust score distribution */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Widget id="fraud" icon={ShieldAlert} title="Fraud detection feed">
+          {(() => {
+            // Exactly the backend's own definition of a prevented fraud attempt:
+            // a verification that resolved to TAMPERED or UNKNOWN_ISSUER. Filtered
+            // from the same real feed, never a separate invented stream.
+            const flagged = s.recent_verifications.filter(
+              (v) => v.verdict === "TAMPERED" || v.verdict === "UNKNOWN_ISSUER");
+            if (flagged.length === 0) {
+              return (
+                <EmptyState
+                  title="No fraud attempts detected"
+                  hint={s.fraud_attempts_prevented > 0
+                    ? `${s.fraud_attempts_prevented} caught historically — none in the recent window shown here.`
+                    : "A verification resolving to tampered or unknown-issuer would appear here."}
+                />
+              );
+            }
+            return (
+              <ol className="flex flex-col divide-y divide-border-default/60">
+                {flagged.map((v, i) => (
+                  <li key={i} className="flex items-center justify-between gap-2 py-2 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate font-mono text-xs">{v.cert_uid}</p>
+                      <p className="truncate text-xs text-text-secondary">{v.institution} · {v.channel}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <Badge tone="danger">{v.verdict}</Badge>
+                      <p className="mt-0.5 text-[10px] text-text-secondary">{formatDate(v.at)}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            );
+          })()}
+        </Widget>
+
+        <Widget id="trust-dist" icon={Gauge} title="Trust score distribution">
+          <TrustScoreDistribution />
+        </Widget>
       </div>
 
       {/* Blockchain configuration (unchanged functionality, kept from the original page) */}
