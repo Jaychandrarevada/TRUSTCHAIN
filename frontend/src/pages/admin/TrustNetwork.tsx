@@ -31,7 +31,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { EASE } from "@/lib/motion";
 import { adminApi } from "@/services/api";
 import type { InstitutionNetworkRow } from "@/types";
-import { computeTrustScore } from "@/lib/trustScore";
+import { TrustScorePanel } from "@/components/domain/TrustScorePanel";
 import { Badge, CopyField, Skeleton, EmptyState } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
 import { cn, formatPercent } from "@/utils";
@@ -226,7 +226,6 @@ function ProfileDrawer({
   onClose: () => void;
 }) {
   const reduced = useReducedMotion();
-  const trust = useMemo(() => computeTrustScore(row), [row]);
   const connected = useMemo(
     () => row.accreditation_body
       ? allRows.filter((r) => r.id !== row.id && r.accreditation_body === row.accreditation_body)
@@ -265,20 +264,9 @@ function ProfileDrawer({
         {row.chain_issuer_id != null && <Badge tone="info">On-chain issuer #{row.chain_issuer_id}</Badge>}
       </div>
 
-      {/* Trust score — real, explainable composite (lib/trustScore.ts) */}
-      <div className="mt-5 rounded-xl border border-border-default/50 bg-surface/40 p-4">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold">Trust score</p>
-          <span className="font-display text-2xl font-extrabold text-primary-500">{trust.score}</span>
-        </div>
-        <p className="text-xs text-text-secondary">{trust.label} · derived from status, on-chain registration, claim rate & revocation history</p>
-        <div className="mt-3 grid grid-cols-4 gap-2 text-center text-[10px] text-text-secondary">
-          <div><p className="font-mono text-sm text-text-primary">{trust.statusPoints}</p>Status</div>
-          <div><p className="font-mono text-sm text-text-primary">{trust.chainPoints}</p>On-chain</div>
-          <div><p className="font-mono text-sm text-text-primary">{trust.claimPoints}</p>Claims</div>
-          <div><p className="font-mono text-sm text-text-primary">{trust.integrityPoints}</p>Integrity</div>
-        </div>
-      </div>
+      {/* Trust score — gauge, weighted breakdown, real metrics, and the
+          explicit statement that this is reputation, not verification. */}
+      <TrustScorePanel row={row} className="mt-5" />
 
       {/* Blockchain identity — real fields only */}
       <div className="mt-4 rounded-xl border border-border-default/50 bg-surface/40 p-4">
