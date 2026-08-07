@@ -4,14 +4,16 @@
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { adminApi } from "@/services/api";
-import { ApiError } from "@/services/http";
+import { adminApi, miscApi } from "@/services/api";
 import { formatDate } from "@/utils";
+import { SUPPORTED_CHAINS } from "@/constants";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { EmptyState, Skeleton, Table, Td, Th } from "@/components/ui/misc";
 import { useToast } from "@/components/ui/toast";
 import type { KybApplication } from "@/types";
+import { ChainAction } from "@/components/domain/ChainAction";
+import { REGISTRATION_PIPELINE } from "@/components/domain/blockchainStages";
 
 export default function KybQueue() {
   const toast = useToast();
@@ -20,15 +22,12 @@ export default function KybQueue() {
 
   const { data, isLoading } = useQuery({ queryKey: ["admin", "kyb"], queryFn: adminApi.kybQueue });
 
-  const approve = useMutation({
-    mutationFn: (id: string) => adminApi.approveKyb(id),
-    onSuccess: (res) => {
-      toast("success", `Approved — issuer #${res.chain_issuer_id} registered on-chain (tx ${res.tx_hash.slice(0, 10)}…).`);
-      setTarget(undefined);
-      queryClient.invalidateQueries({ queryKey: ["admin", "kyb"] });
-    },
-    onError: (err) => err instanceof ApiError && toast("danger", err.problem.detail),
-  });
+  // Approval is a real on-chain write (it registers the issuer), so it runs
+  // through the shared blockchain pipeline instead of a bare spinner.
+  const [registering, setRegistering] = useState<KybApplication>();
+
+  const chain = useQuery({ queryKey: ["chain", "info"], queryFn: miscApi.chainInfo, staleTime: 300_000 });
+  const network = chain.data ? (SUPPORTED_CHAINS[chain.data.chain_id] ?? `chainId ${chain.data.chain_id}`) : null;
 
   const reject = useMutation({
     mutationFn: (id: string) => adminApi.rejectKyb(id, "Accreditation could not be confirmed."),
@@ -81,8 +80,7 @@ export default function KybQueue() {
       <ConfirmDialog
         open={!!target}
         onClose={() => setTarget(undefined)}
-        onConfirm={() => target && approve.mutate(target.id)}
-        loading={approve.isPending}
+        onConfirm={() => { setRegistering(target); setTarget(undefined); }}
         title={`Approve ${target?.legal_name}?`}
         confirmLabel="Approve & register on-chain"
         body={
@@ -92,6 +90,21 @@ export default function KybQueue() {
           </p>
         }
       />
+
+      {registering && (
+        <ChainAction
+          preset={REGISTRATION_PIPELINE}
+          network={network}
+          mode={chain.data?.mode}
+          run={() => adminApi.approveKyb(registering.id)}
+          deriveProof={(d) => ({ txHash: d?.tx_hash, chainIssuerId: d?.chain_issuer_id })}
+          onSettled={(o) => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "kyb"] });
+            if (o.ok) toast("success", `${registering.legal_name} is now an active issuer.`);
+          }}
+          onClose={() => setRegistering(undefined)}
+        />
+      )}
     </div>
   );
 }

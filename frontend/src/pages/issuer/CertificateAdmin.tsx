@@ -4,11 +4,12 @@
  * confirm step surfacing SAME_ACTOR verbatim) and supersede correction.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { issuerApi } from "@/services/api";
+import { issuerApi, miscApi } from "@/services/api";
 import { ApiError } from "@/services/http";
 import { useAuth } from "@/contexts/AuthContext";
+import { SUPPORTED_CHAINS } from "@/constants";
 import { humanizeKey } from "@/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +19,8 @@ import { CopyField, Skeleton } from "@/components/ui/misc";
 import { useToast } from "@/components/ui/toast";
 import { statusToVerdict, Timeline } from "@/components/domain/certificate";
 import { VerdictBadge } from "@/components/domain/verdict";
+import { ChainAction } from "@/components/domain/ChainAction";
+import { REVOCATION_PIPELINE, SUPERSEDE_PIPELINE } from "@/components/domain/blockchainStages";
 
 const REASONS = ["fraud", "error", "misconduct", "holder_request"] as const;
 
@@ -34,6 +37,15 @@ export default function CertificateAdmin() {
   const [reason, setReason] = useState<(typeof REASONS)[number]>("error");
   const [supersedeOpen, setSupersedeOpen] = useState(false);
   const [corrected, setCorrected] = useState<Record<string, string>>({});
+  // Which on-chain pipeline overlay is currently running, if any.
+  const [chainAction, setChainAction] = useState<"revoke" | "supersede" | null>(null);
+  // Successor UID held until the user dismisses the pipeline, so navigation
+  // never yanks the page away while they are still reading the result.
+  const supersedeResultRef = useRef<string | null>(null);
+
+  // Real network identity for the pipeline's technical panel — never assumed.
+  const chain = useQuery({ queryKey: ["chain", "info"], queryFn: miscApi.chainInfo, staleTime: 300_000 });
+  const network = chain.data ? (SUPPORTED_CHAINS[chain.data.chain_id] ?? `chainId ${chain.data.chain_id}`) : null;
 
   const { data: cert, isLoading } = useQuery({
     queryKey: ["issuer", "certificate", certUid],
@@ -52,23 +64,9 @@ export default function CertificateAdmin() {
     onSuccess: () => { toast("success", "Revocation recorded — awaiting a second approver."); setRevokeOpen(false); refresh(); },
     onError: (err) => err instanceof ApiError && toast("warning", err.problem.detail),
   });
-  const confirm = useMutation({
-    mutationFn: () => issuerApi.confirmRevoke(certUid),
-    onSuccess: () => { toast("success", "Certificate revoked. The holder has been notified."); refresh(); },
-    onError: (err) => {
-      if (err instanceof ApiError && err.code === "SAME_ACTOR") {
-        toast("warning", "A different approver must confirm this revocation.");
-      } else if (err instanceof ApiError) toast("danger", err.problem.detail);
-    },
-  });
-  const supersede = useMutation({
-    mutationFn: () => issuerApi.supersede(certUid, corrected),
-    onSuccess: (res) => {
-      toast("success", `Corrected certificate ${res.successor_uid} issued.`);
-      navigate(`/issuer/certificates/${res.successor_uid}`);
-    },
-    onError: (err) => err instanceof ApiError && toast("danger", err.problem.detail),
-  });
+  // Revocation and superseding both run through the on-chain pipeline overlay
+  // (ChainAction) rather than a bare spinner: each one is a real chain write,
+  // and the pipeline surfaces the actual transaction it produced.
 
   if (isLoading || !cert) return <Skeleton className="h-96 w-full" />;
   const subject = cert.subject_data ?? {};
@@ -129,7 +127,7 @@ export default function CertificateAdmin() {
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
             {canRevoke && (pendingRevocation ? (
-              <Button variant="danger" loading={confirm.isPending} onClick={() => confirm.mutate()}>
+              <Button variant="danger" onClick={() => setChainAction("revoke")}>
                 Confirm revocation (second approver)
               </Button>
             ) : (
@@ -175,7 +173,8 @@ export default function CertificateAdmin() {
       />
 
       <Dialog open={supersedeOpen} onClose={() => setSupersedeOpen(false)} title="Correct & reissue">
-        <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); supersede.mutate(); }}>
+        <form className="flex flex-col gap-3"
+          onSubmit={(e) => { e.preventDefault(); setSupersedeOpen(false); setChainAction("supersede"); }}>
           <p className="text-sm text-text-secondary">
             A new certificate is issued with the corrected data; this one becomes “superseded”
             with a public pointer to the correction — nothing is silently edited.
@@ -184,9 +183,48 @@ export default function CertificateAdmin() {
             <TextField key={key} label={humanizeKey(key)} value={value}
               onChange={(e) => setCorrected((prev) => ({ ...prev, [key]: e.target.value }))} />
           ))}
-          <Button type="submit" loading={supersede.isPending}>Issue corrected certificate</Button>
+          <Button type="submit">Issue corrected certificate</Button>
         </form>
       </Dialog>
+
+      {chainAction === "revoke" && (
+        <ChainAction
+          preset={REVOCATION_PIPELINE}
+          network={network}
+          mode={chain.data?.mode}
+          run={() => issuerApi.confirmRevoke(certUid)}
+          deriveProof={(d) => ({ txHash: d?.tx_hash })}
+          onSettled={(o) => {
+            refresh();
+            if (o.ok) toast("success", "Certificate revoked. The holder has been notified.");
+            else if (o.code === "SAME_ACTOR") toast("warning", "A different approver must confirm this revocation.");
+          }}
+          onClose={() => setChainAction(null)}
+        />
+      )}
+
+      {chainAction === "supersede" && (
+        <ChainAction
+          preset={SUPERSEDE_PIPELINE}
+          network={network}
+          mode={chain.data?.mode}
+          run={() => issuerApi.supersede(certUid, corrected)}
+          // Supersede returns only the successor UID — there is no transaction
+          // yet, so no chain proof is claimed here.
+          deriveProof={() => ({})}
+          onSettled={(o) => {
+            if (o.ok && o.data) {
+              supersedeResultRef.current = o.data.successor_uid;
+              toast("success", `Corrected certificate ${o.data.successor_uid} issued.`);
+            }
+          }}
+          onClose={() => {
+            const uid = supersedeResultRef.current;
+            setChainAction(null);
+            if (uid) navigate(`/issuer/certificates/${uid}`);
+          }}
+        />
+      )}
     </div>
   );
 }
