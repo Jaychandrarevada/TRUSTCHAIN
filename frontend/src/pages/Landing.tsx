@@ -18,6 +18,7 @@ import { TrustMarquee } from "@/components/motion/TrustMarquee";
 import { NetworkStatus, NetworkStatusCard } from "@/components/NetworkStatus";
 import { Magnetic, Reveal, Spotlight, Stagger, StaggerItem, TiltCard, motion, useReducedMotion } from "@/components/motion";
 import { EASE } from "@/lib/motion";
+import { MerkleTree } from "@/components/viz/primitives";
 
 // ── Interactive verdict demo (mirrors the real verdict UI, safe demo data) ───
 function VerdictDemo() {
@@ -268,6 +269,19 @@ export default function Landing() {
           <Reveal className="text-center">
             <h2 className="font-display text-display font-bold">Issue. Seal. Verify.</h2>
           </Reveal>
+
+          {/* Explanatory diagram of the Merkle structure — an illustration of
+              how batching works, captioned as such. It is not any particular
+              certificate's tree, and does not claim to be. */}
+          <Reveal className="mx-auto mt-12 max-w-2xl">
+            <MerkleTree leafCount={8} highlightLeaf={2} />
+            <p className="mt-3 text-center text-xs text-text-secondary">
+              Illustration: eight certificates hashed into one Merkle root. Verifying a single
+              certificate needs only the highlighted path — one sibling hash per level — which is
+              why an entire batch is sealed by one transaction.
+            </p>
+          </Reveal>
+
           <div className="mt-14 grid gap-8 md:grid-cols-3">
             {STEPS.map((step, i) => (
               <Reveal key={step.n} delay={i * 0.1}>
