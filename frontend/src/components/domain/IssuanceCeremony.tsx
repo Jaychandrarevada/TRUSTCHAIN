@@ -66,17 +66,29 @@ export function IssuanceCeremony({
   const [result, setResult] = useState<Batch | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [muted, setMuted] = useState(isChimeMuted());
-  const startedRef = useRef(false);
+  /**
+   * The in-flight approval, created at most once.
+   *
+   * Must NOT be an "effect already ran" flag: under StrictMode React mounts,
+   * cleans up, then mounts again, so a guard on the effect body lets the first
+   * pass start, the cleanup cancel it, and the second pass return early —
+   * freezing the ceremony on its first stage and never revealing the result.
+   * Memoising the promise lets the effect re-run and re-drive the animation
+   * while the real anchoring transaction still fires exactly once, which
+   * matters here more than anywhere: a duplicate batch anchor is not
+   * recoverable.
+   */
+  const promiseRef = useRef<Promise<Batch> | null>(null);
   const reduced = useReducedMotion();
 
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
     let cancelled = false;
     const dwell = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
     async function play() {
-      const promise = run(); // real request fires now — animation runs alongside it, never before it
+      promiseRef.current ??= run(); // real request fires once, alongside the animation
+      const promise = promiseRef.current;
+      promise.catch(() => undefined); // settled below; avoids an unhandled rejection while stages dwell
 
       for (let i = 0; i < MINING_STEP; i++) {
         if (cancelled) return;
