@@ -5,7 +5,7 @@
  * Both include the skip link and theme toggle (spec §12).
  */
 import {
-  Bell, ChevronRight, Contrast, LogOut, Menu, Moon, MoonStar, PanelLeftClose,
+  Bell, Check, ChevronRight, Contrast, LogOut, Menu, Moon, MoonStar, PanelLeftClose,
   PanelLeftOpen, ShieldCheck, Sun, User, X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -99,15 +99,22 @@ function ThemeToggle() {
       {menu.open && (
         <>
           <div className="fixed inset-0 z-40" onClick={menu.close} aria-hidden />
-          <div role="menu" className="glass-strong absolute right-0 z-50 mt-1 w-44 rounded-xl p-1 shadow-lg">
-            {THEME_OPTIONS.map(({ mode, label, icon: Icon }) => (
-              <button key={mode} role="menuitemradio" aria-checked={theme === mode}
-                onClick={() => { setTheme(mode); menu.close(); }}
-                className={cn("flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors",
-                  theme === mode ? "bg-primary-500/15 text-text-primary" : "text-text-secondary hover:bg-surface")}>
-                <Icon className="h-4 w-4" aria-hidden /> {label}
-              </button>
-            ))}
+          <div role="menu" aria-label="Select theme" className="absolute right-0 z-50 mt-1 w-48 rounded-xl border border-border-default bg-raised p-1.5 shadow-xl">
+            {THEME_OPTIONS.map(({ mode, label, icon: Icon }) => {
+              const isSelected = theme === mode;
+              return (
+                <button key={mode} role="menuitemradio" aria-checked={isSelected}
+                  onClick={() => { setTheme(mode); menu.close(); }}
+                  className={cn("flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors",
+                    isSelected ? "bg-primary-500/15 font-medium text-text-primary" : "text-text-secondary hover:bg-surface hover:text-text-primary")}>
+                  <span className="flex items-center gap-2.5">
+                    <Icon className="h-4 w-4 shrink-0 text-text-secondary" aria-hidden />
+                    {label}
+                  </span>
+                  {isSelected && <Check className="h-4 w-4 shrink-0 text-primary-500" aria-hidden />}
+                </button>
+              );
+            })}
           </div>
         </>
       )}
@@ -148,7 +155,7 @@ function NotificationBell() {
       {menu.open && (
         <>
           <div className="fixed inset-0 z-40" onClick={menu.close} aria-hidden />
-          <div role="menu" aria-label="Notifications" className="glass-strong absolute right-0 z-50 mt-1 max-h-96 w-80 overflow-y-auto rounded-xl p-1 shadow-lg">
+          <div role="menu" aria-label="Notifications" className="absolute right-0 z-50 mt-1 max-h-96 w-80 overflow-y-auto rounded-xl border border-border-default bg-raised p-1.5 shadow-xl">
             {items.length === 0 && (
               <p className="px-3 py-6 text-center text-sm text-text-secondary">No notifications.</p>
             )}
@@ -187,7 +194,7 @@ function ProfileMenu({ homeTo }: { homeTo: string }) {
       {menu.open && (
         <>
           <div className="fixed inset-0 z-40" onClick={menu.close} aria-hidden />
-          <div role="menu" className="glass-strong absolute right-0 z-50 mt-1 w-56 rounded-xl p-1 shadow-lg">
+          <div role="menu" className="absolute right-0 z-50 mt-1 w-56 rounded-xl border border-border-default bg-raised p-1.5 shadow-xl">
             <div className="border-b border-border-default/60 px-3 py-2">
               <p className="truncate text-sm font-medium">{session.userId}</p>
               <p className="text-xs text-text-secondary">{session.roles.join(", ")}</p>

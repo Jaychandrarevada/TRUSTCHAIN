@@ -61,3 +61,10 @@ Thumbs.db
 
 # TS incremental build cache
 *.tsbuildinfo
+
+# ──────────────────────── Generated docs & scripts ────────────────────────────
+*.docx
+generate_doc.py
+generate_handbook.py
+generate_panel_guide.py
+docs/presentation/
