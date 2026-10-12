@@ -34,6 +34,14 @@ export interface VerdictResponse {
     issuer: { name: string | null; status: string | null };
     superseded_by?: string | null;
   };
+  upload_analysis?: {
+    detected_cert_uid: string;
+    extracted_payload?: Record<string, unknown>;
+    filename?: string;
+    pdf_pages?: number;
+    tamper_detected?: boolean;
+    field_discrepancies?: Record<string, { original_on_chain: unknown; modified_in_file: unknown }>;
+  };
 }
 
 export interface CertificateSummary {
@@ -67,6 +75,8 @@ export interface Batch {
   anchor_block: number | null;
   created_by: string;
   approved_by: string | null;
+  created_at?: string | null;
+  certificates?: { cert_uid: string; status: string; type: string; subject_data: Record<string, unknown> }[];
 }
 
 export interface ShareLink {

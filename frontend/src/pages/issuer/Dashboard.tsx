@@ -64,6 +64,11 @@ export default function IssuerDashboard() {
     queryFn: issuerApi.analytics,
     enabled: !!institution.data,
   });
+  const pendingBatches = useQuery({
+    queryKey: ["issuer", "batches", "pending_approval"],
+    queryFn: () => issuerApi.listBatches("pending_approval"),
+    enabled: !!institution.data,
+  });
 
   if (institution.isLoading) return <Skeleton className="h-64 w-full" />;
   if (institution.isError) return <ApplyCard />;
@@ -95,12 +100,60 @@ export default function IssuerDashboard() {
           <StaggerItem><StatCard label="Certificates issued" value={stats.certificates_issued} /></StaggerItem>
           <StaggerItem><StatCard label="Claim rate" value={formatPercent(stats.claim_rate)} /></StaggerItem>
           <StaggerItem><StatCard label="Verifications" value={stats.verifications_total} /></StaggerItem>
-          <StaggerItem><StatCard label="Pending approvals" value={stats.batches_pending_approval}
-            tone={stats.batches_pending_approval > 0 ? "warning" : "default"} /></StaggerItem>
+          <StaggerItem>
+            <Link to="/issuer/batches?status=pending_approval" className="block hover:opacity-90 transition">
+              <StatCard
+                label="Pending approvals"
+                value={stats.batches_pending_approval}
+                tone={stats.batches_pending_approval > 0 ? "warning" : "default"}
+              />
+            </Link>
+          </StaggerItem>
         </Stagger>
       )}
 
       {stats && <InsightsCard insights={deriveIssuerInsights(stats)} />}
+
+      {/* Prominent Pending Approvals Alert for Checker / Approver */}
+      {pendingBatches.data && pendingBatches.data.data.length > 0 && (
+        <Card className="border-warning-500/50 bg-warning-500/10 shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base text-warning-800 dark:text-warning-300 flex items-center gap-2">
+                <span className="text-lg">⏳</span>
+                Batches Awaiting Approval ({pendingBatches.data.data.length})
+              </CardTitle>
+              <Link to="/issuer/batches?status=pending_approval" className="text-xs text-primary-600 hover:underline">
+                View all in queue →
+              </Link>
+            </div>
+            <CardDescription className="text-xs">
+              These batches have been submitted by operators and require an authorized Approver to review
+              and anchor them onto the blockchain.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2.5">
+            {pendingBatches.data.data.map((b) => (
+              <div
+                key={b.id}
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border border-warning-400/30 bg-background p-3"
+              >
+                <div>
+                  <div className="font-semibold text-text-primary text-sm">{b.name}</div>
+                  <div className="text-xs text-text-secondary mt-0.5">
+                    {b.row_count} certificates · ID: <span className="font-mono text-[11px]">{b.id.slice(0, 8)}...</span>
+                  </div>
+                </div>
+                <Link to={`/issuer/batches/${b.id}`}>
+                  <Button size="sm" variant="primary" className="text-xs font-semibold">
+                    Review & Approve Batch →
+                  </Button>
+                </Link>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card glass>
@@ -127,6 +180,7 @@ export default function IssuerDashboard() {
           <CardHeader><CardTitle className="text-base">Quick actions</CardTitle></CardHeader>
           <CardContent className="flex flex-col gap-2">
             <Link to="/issuer/batches/new"><Button className="w-full" disabled={!inst.can_issue}>New batch</Button></Link>
+            <Link to="/issuer/batches"><Button variant="outline" className="w-full">Batches & Approval Queue</Button></Link>
             <Link to="/issuer/certificates"><Button variant="secondary" className="w-full">Browse certificates</Button></Link>
             <Link to="/issuer/audit"><Button variant="ghost" className="w-full">Audit log</Button></Link>
             {!inst.can_issue && (

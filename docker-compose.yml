@@ -1,0 +1,103 @@
+# =============================================================================
+# TrustChain Complete Production / Demo Stack
+# Orchestrates: Frontend (Nginx), Backend API (Flask/Gunicorn), Database (Postgres 16),
+# Cache / Rate Limiter (Redis 7), with Persistent Volumes and Healthchecks.
+# =============================================================================
+
+services:
+  # ── PostgreSQL Database ────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: trustchain-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-trustchain}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trustchain}
+      POSTGRES_DB: ${POSTGRES_DB:-trustchain}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trustchain} -d ${POSTGRES_DB:-trustchain}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Redis (Rate Limiting & Transient Cache) ────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: trustchain-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── Backend Flask API (Gunicorn) ───────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: trustchain-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      FLASK_ENV: production
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trustchain}:${POSTGRES_PASSWORD:-trustchain}@db:5432/${POSTGRES_DB:-trustchain}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-tc-college-demo-secret-key-2026}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-tc-college-demo-jwt-key-2026}
+      BLOCKCHAIN_MODE: ${BLOCKCHAIN_MODE:-mock}
+      MOCK_CHAIN_STATE_FILE: /srv/app/data/mock_chain_state.json
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://localhost:80,http://localhost
+    volumes:
+      - backend-data:/srv/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/api/v1/health/live')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    command: ["sh", "-c", "python -m scripts.seed && gunicorn --bind 0.0.0.0:5000 --workers 4 --timeout 60 --access-logfile - --error-logfile - wsgi:app"]
+
+  # ── Frontend (Nginx Reverse Proxy & React SPA) ─────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api/v1
+        VITE_CHAIN_ID: 137
+        VITE_VERIFY_BASE_URL: http://localhost:3000/verify
+    container_name: trustchain-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  pgdata:
+    name: trustchain_pgdata
+  redisdata:
+    name: trustchain_redisdata
+  backend-data:
+    name: trustchain_backend_data

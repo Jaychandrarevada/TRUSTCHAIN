@@ -13,6 +13,7 @@ COPY --from=builder /install /usr/local
 COPY app ./app
 COPY scripts ./scripts
 COPY wsgi.py .
+RUN mkdir -p /srv/app/data && chown -R trustchain:trustchain /srv/app
 
 USER trustchain
 ENV FLASK_ENV=production PYTHONUNBUFFERED=1

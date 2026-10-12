@@ -78,12 +78,49 @@ export const verifyApi = {
   async byFile(certUid: string, payload: Record<string, unknown>): Promise<VerdictResponse> {
     return (await http.post<VerdictResponse>("/verify/file", { cert_uid: certUid, payload })).data;
   },
+  async uploadPdf(file: File): Promise<VerdictResponse & {
+    upload_analysis?: {
+      detected_cert_uid: string;
+      extracted_payload: Record<string, unknown>;
+      filename: string;
+      pdf_pages: number;
+      tamper_detected: boolean;
+      field_discrepancies?: Record<string, { original_on_chain: unknown; modified_in_file: unknown }>;
+    };
+  }> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return (await http.post("/verify/upload-pdf", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })).data;
+  },
+  async demoCerts(): Promise<{ demo_certificates: {
+    cert_uid: string;
+    institution_name: string;
+    institution_slug: string;
+    student_name: string;
+    program: string;
+    cgpa: string;
+    hall_ticket_no: string;
+    content_hash: string;
+    batch_id: string;
+    merkle_root: string;
+    tx_hash: string;
+    pdf_url: string;
+    pdf_tampered_url: string;
+    verify_url: string;
+  }[] }> {
+    return (await http.get("/verify/demo-certs")).data;
+  },
 };
 
 // ── Issuer console ────────────────────────────────────────────────────────────
 export const issuerApi = {
   async createBatch(name: string, rows: Record<string, unknown>[]): Promise<Batch> {
     return (await http.post<Batch>("/certificates/batches", { name, rows })).data;
+  },
+  async listBatches(status?: string): Promise<{ data: Batch[] }> {
+    return (await http.get<{ data: Batch[] }>("/certificates/batches", { params: status ? { status } : {} })).data;
   },
   async getBatch(id: string): Promise<Batch> {
     return (await http.get<Batch>(`/certificates/batches/${id}`)).data;

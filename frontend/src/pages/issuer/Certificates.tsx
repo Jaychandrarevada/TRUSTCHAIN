@@ -39,21 +39,40 @@ export default function Certificates() {
       {isLoading && <Skeleton className="h-64 w-full" />}
       {data && data.data.length === 0 && (
         <EmptyState title="No certificates match"
-          hint="Issue your first batch and certificates will appear here." />
+          hint="Create a batch under 'New batch' or check 'Batches & Approvals' to review pending certificates." />
       )}
       {data && data.data.length > 0 && (
         <>
           <Table>
             <thead>
-              <tr><Th>Certificate ID</Th><Th>Type</Th><Th>Status</Th><Th>Claimed</Th><Th><span className="sr-only">Open</span></Th></tr>
+              <tr>
+                <Th>Certificate ID</Th>
+                <Th>Type</Th>
+                <Th>Status</Th>
+                <Th>Claimed</Th>
+                <Th>Batch</Th>
+                <Th><span className="sr-only">Open</span></Th>
+              </tr>
             </thead>
             <tbody>
               {data.data.map((cert) => (
                 <tr key={cert.cert_uid}>
                   <Td className="font-mono text-xs">{cert.cert_uid}</Td>
-                  <Td>{cert.type}</Td>
+                  <Td className="capitalize">{cert.type}</Td>
                   <Td><VerdictBadge verdict={statusToVerdict(cert.status)} /></Td>
                   <Td>{cert.claimed ? <Badge tone="success">Claimed</Badge> : <Badge>Unclaimed</Badge>}</Td>
+                  <Td>
+                    {cert.batch_id ? (
+                      <Link
+                        to={`/issuer/batches/${cert.batch_id}`}
+                        className="text-xs text-primary-600 dark:text-primary-400 hover:underline font-mono"
+                      >
+                        {cert.batch_id.slice(0, 8)}...
+                      </Link>
+                    ) : (
+                      "—"
+                    )}
+                  </Td>
                   <Td className="text-right">
                     <Link to={`/issuer/certificates/${cert.cert_uid}`}
                       className="text-sm font-medium text-primary-800 hover:underline dark:text-primary-400">Open</Link>

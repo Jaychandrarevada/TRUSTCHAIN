@@ -1,0 +1,20 @@
+# TrustChain Backend Docker Ignore
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+tests/
+instance/
+*.log
+.env
+.env.*
+!.env.example
+.git/
+.github/
+.gitignore
+qa/

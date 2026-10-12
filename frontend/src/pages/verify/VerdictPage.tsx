@@ -36,6 +36,90 @@ export function VerdictBody({ data }: { data: VerdictResponse }) {
           credential's compact badge so screen readers get the full explanation. */}
       <VerdictPanel verdict={data.verdict} />
 
+      {/* Cryptographic Tamper Analysis if tampered or discrepancies detected */}
+      {(data.verdict === "TAMPERED" || (data.upload_analysis?.field_discrepancies && Object.keys(data.upload_analysis.field_discrepancies).length > 0)) && (
+        <div className="overflow-hidden rounded-xl border border-danger-500/50 bg-danger-500/10 p-5 shadow-sm">
+          <div className="flex items-center gap-2 font-bold text-danger-700 dark:text-danger-400">
+            <span className="text-lg">⚠️</span>
+            <span>Cryptographic Tamper Analysis — Blockchain Seal Mismatch</span>
+          </div>
+          <p className="mt-1 text-xs text-text-secondary">
+            The presented document content was re-hashed using SHA-256. The resulting cryptographic digest
+            does not match the immutable Merkle leaf anchored on the blockchain ledger.
+          </p>
+
+          {data.upload_analysis?.field_discrepancies && Object.keys(data.upload_analysis.field_discrepancies).length > 0 && (
+            <div className="mt-3 overflow-x-auto rounded-lg border border-danger-300/40 bg-background-elevated p-3 text-xs">
+              <div className="mb-2 font-semibold text-text-primary">Detected Alterations vs Blockchain Record:</div>
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-border-default/60 text-text-secondary">
+                    <th className="py-1 pr-3">Field</th>
+                    <th className="py-1 pr-3 text-success-600 dark:text-success-400">Blockchain Record (Authentic)</th>
+                    <th className="py-1 font-bold text-danger-600 dark:text-danger-400">Presented File (Forged)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-default/40 font-mono">
+                  {Object.entries(data.upload_analysis.field_discrepancies).map(([field, diff]) => (
+                    <tr key={field}>
+                      <td className="py-1.5 pr-3 font-sans font-medium capitalize text-text-primary">
+                        {field.replace(/_/g, " ")}
+                      </td>
+                      <td className="py-1.5 pr-3 text-success-600 dark:text-success-400">
+                        {String((diff as any).original_on_chain ?? "—")}
+                      </td>
+                      <td className="py-1.5 font-bold text-danger-600 dark:text-danger-400">
+                        {String((diff as any).modified_in_file ?? "—")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 text-xs font-mono">
+            <div className="rounded-md border border-border-default bg-background-elevated p-2.5">
+              <div className="text-[10px] uppercase font-sans font-semibold text-text-secondary">
+                Expected On-Chain Hash (SHA-256)
+              </div>
+              <div className="mt-1 truncate text-success-600 dark:text-success-400" title={String(data.checks?.integrity?.expected_hash ?? "")}>
+                {String(data.checks?.integrity?.expected_hash ?? "0x...")}
+              </div>
+            </div>
+            <div className="rounded-md border border-border-default bg-background-elevated p-2.5">
+              <div className="text-[10px] uppercase font-sans font-semibold text-text-secondary">
+                Presented Document Hash (SHA-256)
+              </div>
+              <div className="mt-1 truncate text-danger-600 dark:text-danger-400" title={String(data.checks?.integrity?.presented_hash ?? "")}>
+                {String(data.checks?.integrity?.presented_hash ?? "Mismatch / Rejected")}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Download Actions for Demo / Testing */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border-default bg-background-elevated px-4 py-2.5 text-xs">
+        <span className="font-medium text-text-secondary">Official Degree PDF:</span>
+        <div className="flex items-center gap-2">
+          <a
+            href={`/api/v1/verify/${certUid}/pdf`}
+            download
+            className="inline-flex items-center gap-1 rounded bg-primary-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-primary-700 transition"
+          >
+            <span>📥 Download Original PDF</span>
+          </a>
+          <a
+            href={`/api/v1/verify/${certUid}/pdf-tampered`}
+            download
+            className="inline-flex items-center gap-1 rounded border border-danger-500/50 bg-danger-500/10 px-2.5 py-1 text-xs font-medium text-danger-600 hover:bg-danger-500/20 transition dark:text-danger-400"
+          >
+            <span>⚠️ Download Tampered PDF</span>
+          </a>
+        </div>
+      </div>
+
       {data.verdict === "SUPERSEDED" && data.certificate.superseded_by && (
         <p className="rounded-md bg-info-100 p-3 text-sm text-info-700 dark:bg-info-700/20 dark:text-info-400">
           A corrected certificate exists —{" "}

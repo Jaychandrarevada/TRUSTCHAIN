@@ -83,9 +83,47 @@ def main() -> None:
             for cert in batch.certificates.all():
                 print(f"  cert {cert.cert_uid} -> verify at /api/v1/verify/{cert.cert_uid}")
 
-        # Second approver so two-person revocation works in the demo (revoke
-        # needs initiate + confirm by DIFFERENT approvers). Idempotent; also
-        # backfills existing databases on re-run.
+        # Seed Osmania University for real certificate tamper demonstration
+        ou = Institution.query.filter_by(slug="osmania-university").first()
+        if ou is None:
+            ou_owner = seed_user("registrar@osmania.ac.in", "Dr. K. Ravinder", "student")
+            ou = institution_service.create_institution(
+                ou_owner, "Osmania University", "osmania-university", "university", "UGC", "UGC/OU/1918/001")
+            seed_user("registrar@osmania.ac.in", "Dr. K. Ravinder", "approver", ou.id)
+            ou_operator = seed_user("exams@osmania.ac.in", "Examination Controller", "operator", ou.id)
+            g.user_id = admin.id
+            institution_service.approve_kyb(ou, admin.id)
+
+            ou_batch = certificate_service.create_batch(
+                ou, "103rd Annual Convocation - Faculty of Engineering",
+                [
+                    {
+                        "holder_name": "K. Rahul Sharma",
+                        "holder_email": "rahul.sharma@osmania.ac.in",
+                        "program": "B.Tech Computer Science & Engineering",
+                        "hall_ticket_no": "1005-21-733-042",
+                        "cgpa": "8.85",
+                        "division": "First Class with Distinction",
+                        "college": "University College of Engineering, Osmania University",
+                    },
+                    {
+                        "holder_name": "Sneha Reddy",
+                        "holder_email": "sneha.reddy@osmania.ac.in",
+                        "program": "B.Tech Artificial Intelligence & Machine Learning",
+                        "hall_ticket_no": "1005-21-733-088",
+                        "cgpa": "9.12",
+                        "division": "First Class with Distinction",
+                        "college": "University College of Engineering, Osmania University",
+                    }
+                ],
+                ou_operator.id)
+            certificate_service.submit_batch(ou_batch)
+            certificate_service.approve_batch(ou_batch, admin.id)
+            print(f"Osmania University batch anchored: root={ou_batch.merkle_root} tx={ou_batch.anchor_tx_hash}")
+            for c in ou_batch.certificates.all():
+                print(f"  OU cert {c.cert_uid} ({c.subject_data.get('holder_name')}) -> verify at /api/v1/verify/{c.cert_uid}")
+
+        # Second approver so two-person revocation works in the demo
         institution = Institution.query.filter_by(slug="demo-university").first()
         if institution:
             seed_user("approver2@demo-university.local", "Rahul Menon", "approver", institution.id)

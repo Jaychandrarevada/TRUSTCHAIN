@@ -16,3 +16,5 @@ web3==7.6.0                   # blockchain integration (eth-account/eth-utils in
 qrcode[pil]==7.4.2            # QR generation
 redis==5.0.7                  # limiter storage + cache (prod)
 anthropic==0.120.2             # AI assistant (advisory-only — see app/services/ai_service.py)
+reportlab==5.0.1              # High-fidelity degree certificate PDF rendering
+pypdf==6.19.0                 # PDF metadata manipulation & cryptographic watermarking

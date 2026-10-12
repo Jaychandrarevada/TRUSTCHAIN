@@ -4,7 +4,7 @@
 # Production uses the same image behind the platform's EKS deployment; this
 # compose file is a dev/CI convenience, not the prod topology (TDD §18).
 services:
-  api:
+  backend:
     build: .
     ports: ["5000:5000"]
     environment:
@@ -17,12 +17,13 @@ services:
       CORS_ORIGINS: http://localhost:3000
     depends_on:
       db: { condition: service_healthy }
-      redis: { condition: service_started }
+      redis: { condition: service_healthy }
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:5000/api/v1/health/live')\""]
       interval: 15s
       timeout: 5s
       retries: 5
+    command: ["sh", "-c", "python -m scripts.seed && gunicorn --bind 0.0.0.0:5000 --workers 4 --timeout 60 --access-logfile - --error-logfile - wsgi:app"]
 
   db:
     image: postgres:16-alpine
@@ -41,6 +42,11 @@ services:
   redis:
     image: redis:7-alpine
     ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
 volumes:
   pgdata:

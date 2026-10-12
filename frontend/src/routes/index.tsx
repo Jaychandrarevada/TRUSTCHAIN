@@ -6,7 +6,7 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import {
-  BarChart3, Building2, FileCheck2, LayoutDashboard, ListChecks,
+  BarChart3, Boxes, Building2, FileCheck2, LayoutDashboard, ListChecks,
   Network, ScrollText, Search, Wallet,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,6 +25,7 @@ const WalletHome = lazy(() => import("@/pages/student/WalletHome"));
 const WalletCertificate = lazy(() => import("@/pages/student/WalletCertificate"));
 const ClaimPage = lazy(() => import("@/pages/student/ClaimPage"));
 const IssuerDashboard = lazy(() => import("@/pages/issuer/Dashboard"));
+const BatchesList = lazy(() => import("@/pages/issuer/BatchesList"));
 const NewBatch = lazy(() => import("@/pages/issuer/NewBatch"));
 const BatchDetail = lazy(() => import("@/pages/issuer/BatchDetail"));
 const Certificates = lazy(() => import("@/pages/issuer/Certificates"));
@@ -56,6 +57,7 @@ function HomeRedirect() {
 // ── Portal nav configs (role-filtered sidebars, spec §2.2) ───────────────────
 const issuerNav = [
   { to: "/issuer", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" aria-hidden /> },
+  { to: "/issuer/batches", label: "Batches & Approvals", icon: <Boxes className="h-4 w-4" aria-hidden /> },
   { to: "/issuer/batches/new", label: "New batch", icon: <FileCheck2 className="h-4 w-4" aria-hidden /> },
   { to: "/issuer/certificates", label: "Certificates", icon: <ListChecks className="h-4 w-4" aria-hidden /> },
   { to: "/issuer/audit", label: "Audit log", icon: <ScrollText className="h-4 w-4" aria-hidden /> },
@@ -106,6 +108,7 @@ export function AppRoutes() {
         {/* Issuer console */}
         <Route element={<RequireRole roles={ISSUER_ROLES}><ConsoleLayout title="Institution console" nav={issuerNav} /></RequireRole>}>
           <Route path="/issuer" element={<IssuerDashboard />} />
+          <Route path="/issuer/batches" element={<BatchesList />} />
           <Route path="/issuer/batches/new" element={<NewBatch />} />
           <Route path="/issuer/batches/:batchId" element={<BatchDetail />} />
           <Route path="/issuer/certificates" element={<Certificates />} />

@@ -46,9 +46,17 @@ def verify_certificate(cert: Certificate, *, channel: str = "url",
     if presented_payload is not None:
         presented_hash = merkle.content_hash(merkle.canonicalize(
             {"cert_uid": cert.cert_uid, "type": cert.certificate_type, **presented_payload}))
-        checks["integrity"] = {"pass": presented_hash == cert.content_hash}
+        checks["integrity"] = {
+            "pass": presented_hash == cert.content_hash,
+            "expected_hash": cert.content_hash,
+            "presented_hash": presented_hash,
+        }
     else:
-        checks["integrity"] = {"pass": True, "note": "stored-record verification"}
+        checks["integrity"] = {
+            "pass": True,
+            "note": "stored-record verification",
+            "expected_hash": cert.content_hash,
+        }
 
     # 2) Merkle proof + 3) on-chain anchor.
     root = cert.batch.merkle_root

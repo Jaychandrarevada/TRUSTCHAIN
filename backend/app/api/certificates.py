@@ -41,19 +41,40 @@ def _my_cert(cert_uid: str) -> Certificate:
     return cert
 
 
-def _batch_json(b: Batch) -> dict:
-    return {
+def _batch_json(b: Batch, include_certs: bool = False) -> dict:
+    data = {
         "id": b.id, "name": b.name, "status": b.status, "row_count": b.row_count,
         "error_report": b.error_report, "merkle_root": b.merkle_root,
         "anchor_tx_hash": b.anchor_tx_hash, "anchor_block": b.anchor_block,
         "created_by": b.created_by, "approved_by": b.approved_by,
+        "created_at": b.created_at.isoformat() if b.created_at else None,
     }
+    if include_certs:
+        certs = b.certificates.order_by(Certificate.leaf_index).limit(100).all()
+        data["certificates"] = [
+            {
+                "cert_uid": c.cert_uid,
+                "status": c.status,
+                "type": c.certificate_type,
+                "subject_data": c.subject_data or {},
+            }
+            for c in certs
+        ]
+    return data
 
 
 @ns.route("/batches")
 class Batches(Resource):
-    method_decorators = [require_permission("certificates:issue")]
+    @require_permission("certificates:read")
+    @ns.doc(params={"status": "Filter by batch status (e.g. pending_approval, anchored, draft)"})
+    def get(self):
+        query = Batch.query.filter_by(institution_id=g.institution_id)
+        if status := request.args.get("status"):
+            query = query.filter_by(status=status)
+        rows = query.order_by(Batch.created_at.desc()).all()
+        return {"data": [_batch_json(b) for b in rows]}
 
+    @require_permission("certificates:issue")
     @ns.doc(description="Create a batch with dry-run validation (FR-ISS-002/003). "
                         "Returns 'validated' or 'draft' + row-level error report.")
     @ns.response(201, "Batch created")
@@ -68,7 +89,7 @@ class BatchDetail(Resource):
     method_decorators = [require_permission("certificates:read")]
 
     def get(self, batch_id: str):
-        return _batch_json(_my_batch(batch_id))
+        return _batch_json(_my_batch(batch_id), include_certs=True)
 
 
 @ns.route("/batches/<string:batch_id>/submit")

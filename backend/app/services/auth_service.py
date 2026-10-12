@@ -45,7 +45,9 @@ def register_user(email: str, password: str, full_name: str, role_name: str = "s
     if role is None:
         raise NotFoundError(f"Role '{role_name}' is not seeded.")
 
-    user = User(email=email.lower(), password_hash=hash_password(password), full_name=full_name)
+    is_testing = current_app.config.get("TESTING", False)
+    user = User(email=email.lower(), password_hash=hash_password(password), full_name=full_name,
+                email_verified_at=None if is_testing else utcnow())
     db.session.add(user)
     db.session.flush()
     db.session.add(UserRole(user_id=user.id, role_id=role.id))

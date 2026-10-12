@@ -47,7 +47,7 @@ export default function Login() {
       if (err instanceof ApiError && err.code === "ACCOUNT_LOCKED") {
         setError("root", { message: "Too many attempts — try again in a few minutes." });
       } else if (err instanceof ApiError) {
-        setError("root", { message: "Email or password didn't match. Try again, or reset your password." });
+        setError("root", { message: err.problem.detail || "Email or password didn't match. Try again, or reset your password." });
       } else {
         setError("root", { message: "Couldn't reach the server. Check your connection." });
       }

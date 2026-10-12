@@ -24,13 +24,13 @@ import { EASE } from "@/lib/motion";
 export const BOOT_SEEN_KEY = "tc-boot-seen-v1";
 
 // ── Phase timeline (ms from mount) ───────────────────────────────────────────
-const T_PARTICLES_IN = 550; // particles fade in, scattered
-const T_CONVERGE = 1650; // particles ease toward node targets
-const T_WIRE = 2350; // edges draw between nodes
-const T_BEAM = 3000; // golden beam sweeps the assembled mark
-const T_LOCK = 3300; // logo locks; wordmark + tagline settle
-const T_PULSE = 3900; // soft glow pulse
-const SAFETY_MS = 5200; // hard ceiling — always resolves, no matter what
+const T_PARTICLES_IN = 400; // particles fade in, scattered
+const T_CONVERGE = 1100;    // particles ease toward node targets
+const T_WIRE = 1600;        // edges draw between nodes
+const T_BEAM = 2050;        // golden beam sweeps the assembled mark
+const T_LOCK = 2350;        // logo locks; wordmark + tagline settle
+const T_PULSE = 2800;       // soft glow pulse
+const SAFETY_MS = 3400;     // hard ceiling — always resolves, no matter what
 
 // ── Node/edge geometry — a shield + checkmark, in a 100×100 normalized box ──
 const OUTLINE: [number, number][] = [
@@ -62,15 +62,13 @@ export function BootSequence({ onDone }: { onDone: () => void }) {
   const finish = () => {
     if (finishedRef.current) return;
     finishedRef.current = true;
-    try { localStorage.setItem(BOOT_SEEN_KEY, "1"); } catch { /* private mode — replay next visit, harmless */ }
     setPhase("out");
-    window.setTimeout(onDone, 500); // matches the exit-transition duration below
+    window.setTimeout(onDone, 400); // matches the exit-transition duration
   };
 
   // Phase clock — coarse React state transitions only at beat boundaries;
   // the canvas itself runs its own high-frequency RAF loop (see below).
   useEffect(() => {
-    const start = performance.now();
     const timers = [
       window.setTimeout(() => setPhase("wire"), T_WIRE),
       window.setTimeout(() => setPhase("beam"), T_BEAM),
@@ -78,8 +76,14 @@ export function BootSequence({ onDone }: { onDone: () => void }) {
       window.setTimeout(() => setPhase("pulse"), T_PULSE),
       window.setTimeout(finish, SAFETY_MS),
     ];
-    void start;
-    return () => timers.forEach(clearTimeout);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") finish();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      timers.forEach(clearTimeout);
+      window.removeEventListener("keydown", onKeyDown);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

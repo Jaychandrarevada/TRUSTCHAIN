@@ -12,28 +12,19 @@ import { ToastProvider } from "@/components/ui/toast";
 import { ErrorState } from "@/components/ui/misc";
 import { CommandPalette } from "@/components/CommandPalette";
 import { AiAssistant } from "@/components/AiAssistant";
-import { BootSequence, BOOT_SEEN_KEY } from "@/components/BootSequence";
+import { AnimatePresence } from "framer-motion";
+import { BootSequence } from "@/components/BootSequence";
+import { RouteLoadingOverlay } from "@/components/motion/RouteLoadingOverlay";
 import { AppRoutes } from "@/routes";
 
 /**
- * Whether to play the first-visit brand intro. Reduced-motion users never see
- * it (WCAG 2.3.3) — the check runs once, synchronously, before first paint,
- * so there is never a flash of the intro that then immediately vanishes.
- *
- * Landing page ONLY. The intro is a brand moment for someone arriving at the
- * marketing home, and nowhere else: a visitor who scanned a certificate QR
- * lands on /v/:certUid wanting a verdict, and someone opening /login wants the
- * form — a cinematic overlay in front of either is an obstacle, not a welcome.
- * Checked against `window.location` rather than a router hook because this runs
- * above <BrowserRouter>, before first paint.
+ * Whether to play the brand intro animation on the landing page.
+ * Honors WCAG 2.3.3 reduced motion preferences.
  */
 function shouldPlayBoot(): boolean {
-  if (window.location.pathname !== "/") return false;
-  try {
-    if (localStorage.getItem(BOOT_SEEN_KEY)) return false;
-  } catch {
-    return false; // no storage (private mode edge case) — never loop the intro
-  }
+  if (typeof window === "undefined") return false;
+  const isLanding = window.location.pathname === "/" || window.location.pathname === "";
+  if (!isLanding) return false;
   return !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
@@ -88,9 +79,10 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error?: Erro
 }
 
 export default function App() {
-  // The app mounts and is fully interactive immediately — the boot sequence,
-  // when shown, is a purely additive overlay on top. It never gates usability.
-  const [booting, setBooting] = useState(shouldPlayBoot);
+  const isLanding = typeof window !== "undefined" && (window.location.pathname === "/" || window.location.pathname === "");
+  const [booting, setBooting] = useState(() => isLanding && shouldPlayBoot());
+  const [initializingRoute, setInitializingRoute] = useState(() => !isLanding);
+
   return (
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
@@ -101,7 +93,12 @@ export default function App() {
               <CommandPalette />
               <AiAssistant />
               <AppRoutes />
-              {booting && <BootSequence onDone={() => setBooting(false)} />}
+              <AnimatePresence mode="wait">
+                {booting && <BootSequence key="boot" onDone={() => setBooting(false)} />}
+                {initializingRoute && (
+                  <RouteLoadingOverlay key="route-init" onDone={() => setInitializingRoute(false)} />
+                )}
+              </AnimatePresence>
             </ToastProvider>
           </AuthProvider>
         </BrowserRouter>
